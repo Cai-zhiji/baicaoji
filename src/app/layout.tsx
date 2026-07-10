@@ -7,10 +7,17 @@ export const metadata: Metadata = {
   title: "百草计",
   description: "中医开方计价工具",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     title: "百草计",
     statusBarStyle: "default",
+  },
+  other: {
+    "mobile-web-app-capable": "yes",
   },
 };
 

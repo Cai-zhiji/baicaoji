@@ -10,6 +10,9 @@ export default function MainLayout({
   return (
     <>
       <SwRegister />
+      {/* PWA theme-color: 跟随系统主题 */}
+      <meta name="theme-color" media="(prefers-color-scheme: light)" content="#fafaf9" />
+      <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1c1917" />
       <div className="flex h-dvh flex-col bg-(--bg)">
         {/* Top bar */}
         <header

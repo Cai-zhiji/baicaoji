@@ -1,21 +1,31 @@
 {
+  "id": "baicaoji",
   "name": "百草计",
   "short_name": "百草计",
-  "description": "中医开方计价工具",
+  "description": "中医开方计价工具 — 面向中医从业者的轻量级管理应用",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#fafaf9",
   "theme_color": "#1c1917",
+  "categories": ["medical", "productivity", "utilities"],
+  "lang": "zh-CN",
+  "dir": "ltr",
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "screenshots": []
 }
