@@ -24,6 +24,8 @@ interface Herb {
   sellPrice: number;
   costPrice: number;
   stock: number;
+  unit: string | null;
+  unitGrams: number | null;
 }
 
 export default function HerbsPage() {
@@ -35,8 +37,11 @@ export default function HerbsPage() {
   const [sellPrice, setSellPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [stock, setStock] = useState("");
+  const [unit, setUnit] = useState("");
+  const [unitGrams, setUnitGrams] = useState("");
   const [importing, setImporting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Herb | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -81,6 +86,8 @@ export default function HerbsPage() {
     setSellPrice("");
     setCostPrice("");
     setStock("");
+    setUnit("");
+    setUnitGrams("");
     setEditing(null);
   }
 
@@ -100,6 +107,8 @@ export default function HerbsPage() {
           sellPrice: parseFloat(sellPrice) || 0,
           costPrice: parseFloat(costPrice) || 0,
           stock: stock ? parseFloat(stock) : undefined,
+          unit: unit || null,
+          unitGrams: unitGrams ? parseFloat(unitGrams) : null,
         }),
       });
       if (res.ok) {
@@ -131,6 +140,24 @@ export default function HerbsPage() {
     }
   }
 
+  async function clearAll() {
+    setClearing(true);
+    try {
+      const res = await fetch("/api/herbs", { method: "DELETE" });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success(result.message);
+        setHerbs([]);
+      } else {
+        toast.error(result.error || "清空失败");
+      }
+    } catch {
+      toast.error("清空失败");
+    } finally {
+      setClearing(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -158,6 +185,17 @@ export default function HerbsPage() {
                 </Button>
               }
             />
+            {herbs.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setClearing(true)}
+                disabled={clearing}
+                className="text-[11px] text-(--muted)"
+              >
+                清空
+              </Button>
+            )}
             <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
               <DialogHeader>
                 <DialogTitle>{editing ? "编辑药材" : "添加药材"}</DialogTitle>
@@ -181,6 +219,44 @@ export default function HerbsPage() {
                   <Label>库存 (克){editing && <span className="ml-1 text-[11px] text-(--muted)">当前 {editing.stock}g，修改后自动生成库存记录</span>}</Label>
                   <Input type="number" step="0.5" min="0" value={stock} onChange={(e) => setStock(e.target.value)} placeholder={editing ? `${editing.stock}` : "初始库存（可选）"} />
                 </div>
+                {/* Unit settings */}
+                <details className="group">
+                  <summary className="cursor-pointer text-[13px] text-(--muted) hover:text-(--fg) select-none">
+                    替代计量单位（可选）
+                  </summary>
+                  <div className="mt-3 grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[12px]">单位</Label>
+                      <select
+                        value={unit}
+                        onChange={(e) => setUnit(e.target.value)}
+                        className="w-full rounded-[var(--radius-sm-val)] border border-(--border) bg-(--bg) px-3 py-1.5 text-[13px]"
+                      >
+                        <option value="">仅克 (g)</option>
+                        <option value="枚">枚</option>
+                        <option value="个">个</option>
+                        <option value="片">片</option>
+                        <option value="升">升</option>
+                        <option value="合">合</option>
+                        <option value="等分">等分</option>
+                      </select>
+                    </div>
+                    {unit && (
+                      <div className="space-y-1.5">
+                        <Label className="text-[12px]">1{unit} = ?克</Label>
+                        <Input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          value={unitGrams}
+                          onChange={(e) => setUnitGrams(e.target.value)}
+                          placeholder="如：1枚≈2.5g"
+                          className="text-[13px]"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </details>
                 <Button onClick={save} className="w-full">
                   {editing ? "保存修改" : "添加"}
                 </Button>
@@ -216,6 +292,11 @@ export default function HerbsPage() {
                 </span>
               </div>
               <div className="flex items-center gap-3">
+                {herb.unit && herb.unitGrams && (
+                  <Badge variant="outline" className="text-[11px] font-normal">
+                    1{herb.unit}≈{herb.unitGrams}g
+                  </Badge>
+                )}
                 <span className="text-[13px] tabular-nums">
                   ¥{herb.sellPrice.toFixed(2)}
                   <span className="text-[11px] text-(--muted)">/g</span>
@@ -236,6 +317,8 @@ export default function HerbsPage() {
                       setSellPrice(herb.sellPrice.toString());
                       setCostPrice(herb.costPrice.toString());
                       setStock(herb.stock.toString());
+                      setUnit(herb.unit || "");
+                      setUnitGrams(herb.unitGrams?.toString() || "");
                       setOpen(true);
                     }}
                   >
@@ -255,6 +338,26 @@ export default function HerbsPage() {
           ))
         )}
       </div>
+
+      {/* Clear all confirmation */}
+      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
+        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
+          <DialogHeader>
+            <DialogTitle>确认清空</DialogTitle>
+          </DialogHeader>
+          <p className="text-[14px] text-(--fg-secondary)">
+            确定删除全部 {herbs.length} 种药材吗？药方明细和模版明细也将一并清空，此操作不可恢复。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearing(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={clearAll}>
+              清空全部
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>

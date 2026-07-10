@@ -5,14 +5,52 @@ import { toPinyin } from "@/lib/pinyin";
 import { handleApiError } from "@/services/errors";
 
 /**
- * 解析 "药材名" 或 "药材名 克数g" 格式
+ * 解析药材字符串，支持多种格式：
+ *   "黄芪 15g"     → { name: "黄芪", grams: 15 }
+ *   "大枣 12枚"    → { name: "大枣", grams: 0, unit: "枚", unitVal: 12 }
+ *   "杏仁 70个"    → { name: "杏仁", grams: 0, unit: "个", unitVal: 70 }
+ *   "半夏 半升"    → { name: "半夏", grams: 0, unit: "升", unitVal: 0.5 }
+ *   "生姜 9片"     → { name: "生姜", grams: 0, unit: "片", unitVal: 9 }
  */
-function parseHerbWithGrams(raw: string): { name: string; grams: number } {
-  const match = raw.trim().match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*g?$/);
+function parseHerbWithGrams(raw: string): {
+  name: string;
+  grams: number;
+  unit?: string;
+  unitVal?: number;
+} {
+  const trimmed = raw.trim();
+
+  // Try "名称 数值单位" pattern (like 大枣 12枚)
+  const unitMatch = trimmed.match(
+    /^(.+?)\s+(\d+(?:\.\d+)?)\s*(枚|个|片|升|合|尺)$/
+  );
+  if (unitMatch) {
+    return {
+      name: unitMatch[1].trim(),
+      grams: 0, // will be resolved via herb's unitGrams
+      unit: unitMatch[3],
+      unitVal: parseFloat(unitMatch[2]),
+    };
+  }
+
+  // Try 半升/半合 pattern
+  const halfMatch = trimmed.match(/^(.+?)\s+(半)(升|合)$/);
+  if (halfMatch) {
+    return {
+      name: halfMatch[1].trim(),
+      grams: 0,
+      unit: halfMatch[3],
+      unitVal: 0.5,
+    };
+  }
+
+  // Standard "名称 克数g" or "名称 克数" format
+  const match = trimmed.match(/^(.+?)\s+(\d+(?:\.\d+)?)\s*g?$/);
   if (match) {
     return { name: match[1].trim(), grams: parseFloat(match[2]) };
   }
-  return { name: raw.trim(), grams: 0 };
+
+  return { name: trimmed, grams: 0 };
 }
 
 export async function POST(request: NextRequest) {
@@ -105,8 +143,10 @@ export async function POST(request: NextRequest) {
 
       const templateItems: Array<{ herbId: number; grams: number }> = [];
       for (const raw of rawItems) {
-        const { name, grams } = parseHerbWithGrams(raw);
+        const { name, grams, unit, unitVal } = parseHerbWithGrams(raw);
         let id = herbMap.get(name);
+        let finalGrams = grams;
+
         // 药材不存在则自动创建
         if (!id) {
           const herb = await prisma.herb.create({
@@ -115,12 +155,31 @@ export async function POST(request: NextRequest) {
               pinyin: toPinyin(name),
               sellPrice: 0,
               costPrice: 0,
+              unit: unit ?? null,
             },
           });
           id = herb.id;
           herbMap.set(name, id);
         }
-        templateItems.push({ herbId: id, grams });
+
+        // 如果有替代单位（如 枚/个），通过药材的 unitGrams 转换为克
+        if (unit && unitVal && grams === 0) {
+          const herb = await prisma.herb.findUnique({
+            where: { id },
+            select: { unitGrams: true },
+          });
+          if (herb?.unitGrams) {
+            finalGrams = unitVal * herb.unitGrams;
+          } else {
+            // 默认转换
+            const defaultConversions: Record<string, number> = {
+              '枚': 1, '个': 0.4, '片': 3, '升': 20, '合': 2,
+            };
+            finalGrams = unitVal * (defaultConversions[unit] || 1);
+          }
+        }
+
+        templateItems.push({ herbId: id, grams: finalGrams });
       }
 
       if (templateItems.length === 0) {

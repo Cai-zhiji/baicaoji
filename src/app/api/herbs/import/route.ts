@@ -32,6 +32,12 @@ export async function POST(request: NextRequest) {
     const costPriceIdx = header.findIndex(
       (h) => h === "成本价" || h === "costPrice" || h.toLowerCase() === "costprice" || h === "cost"
     );
+    const unitIdx = header.findIndex(
+      (h) => h === "单位" || h === "unit" || h.toLowerCase() === "unit"
+    );
+    const unitGramsIdx = header.findIndex(
+      (h) => h === "单位克数" || h === "unitGrams" || h.toLowerCase() === "unitgrams"
+    );
 
     if (nameIdx === -1) {
       return NextResponse.json(
@@ -64,6 +70,8 @@ export async function POST(request: NextRequest) {
 
       const sellPrice = sellPriceIdx !== -1 ? parseFloat(cols[sellPriceIdx]) || 0 : 0;
       const costPrice = costPriceIdx !== -1 ? parseFloat(cols[costPriceIdx]) || 0 : 0;
+      const unit = unitIdx !== -1 ? (cols[unitIdx]?.trim() || null) : null;
+      const unitGrams = unitGramsIdx !== -1 ? (parseFloat(cols[unitGramsIdx]) || null) : null;
 
       try {
         await prisma.herb.create({
@@ -72,6 +80,8 @@ export async function POST(request: NextRequest) {
             pinyin: toPinyin(name),
             sellPrice,
             costPrice,
+            unit: unit || null,
+            unitGrams: unitGrams || null,
           },
         });
         existingNames.add(name);

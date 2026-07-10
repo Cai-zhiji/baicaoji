@@ -86,6 +86,7 @@ export default function PrescriptionsPage() {
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Prescription | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   const loadData = () => {
     fetch("/api/prescriptions?take=200")
@@ -188,11 +189,40 @@ export default function PrescriptionsPage() {
     }
   };
 
+  async function clearAll() {
+    setClearing(true);
+    try {
+      const res = await fetch("/api/prescriptions", { method: "DELETE" });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success(result.message);
+        setPrescriptions([]);
+      } else {
+        toast.error(result.error || "清空失败");
+      }
+    } catch {
+      toast.error("清空失败");
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-[18px] font-[590] tracking-[-0.01em]">历史药方</h1>
+        {prescriptions.length > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setClearing(true)}
+            disabled={clearing}
+            className="text-[11px] text-(--muted)"
+          >
+            清空
+          </Button>
+        )}
       </div>
 
       {/* Filters */}
@@ -412,6 +442,26 @@ export default function PrescriptionsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear all confirmation */}
+      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
+        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
+          <DialogHeader>
+            <DialogTitle>确认清空</DialogTitle>
+          </DialogHeader>
+          <p className="text-[14px] text-(--fg-secondary)">
+            确定删除全部 {prescriptions.length} 条药方吗？药材库存将自动退回，此操作不可恢复。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearing(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={clearAll}>
+              清空全部
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

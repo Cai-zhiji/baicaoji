@@ -9,13 +9,15 @@ export async function PUT(
   try {
     const { id } = await params;
     const data = await request.json();
-    const { name, sellPrice, costPrice, stock } = data;
+    const { name, sellPrice, costPrice, stock, unit, unitGrams } = data;
 
     const herb = await updateHerb(parseInt(id), {
       ...(name !== undefined && { name }),
       ...(sellPrice !== undefined && { sellPrice }),
       ...(costPrice !== undefined && { costPrice }),
       ...(stock !== undefined && { stock: parseFloat(stock) }),
+      ...(unit !== undefined && { unit: unit || null }),
+      ...(unitGrams !== undefined && { unitGrams: unitGrams != null ? parseFloat(unitGrams) : null }),
     });
 
     return NextResponse.json(herb);

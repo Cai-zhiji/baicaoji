@@ -1,55 +1,91 @@
-// 百草计 Service Worker — basic offline shell
-const CACHE_NAME = "baicaoji-v1";
+// 百草计 Service Worker — 离线壳 + API 缓存
+const CACHE_STATIC = "baicaoji-static-v2";
+const CACHE_API = "baicaoji-api-v1";
 
-// Assets to pre-cache on install
+// 静态资源预缓存
 const PRE_CACHE = ["/", "/manifest.json"];
 
+// ── Install ──
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRE_CACHE))
+    caches.open(CACHE_STATIC).then((cache) => cache.addAll(PRE_CACHE))
   );
-  // Do NOT call skipWaiting() — let the user refresh when ready
 });
 
+// ── Activate ──
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys
+          .filter((k) => k !== CACHE_STATIC && k !== CACHE_API)
+          .map((k) => caches.delete(k))
+      )
     )
   );
-  // Do NOT call clients.claim() — only control pages loaded after activation
 });
 
+// ── Message ──
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
 });
 
+// ── Fetch ──
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
+  const url = new URL(event.request.url);
+
+  // 只处理 GET
   if (event.request.method !== "GET") return;
-  // Don't cache API requests
-  if (event.request.url.includes("/api/")) return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      // Return cached response immediately, but update cache in background
-      const fetchPromise = fetch(event.request)
-        .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, clone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          // Network failed — if we have a cached version, it was already returned
-        });
+  // 排除 Next.js 开发模式请求（HMR、_next 等）
+  if (
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.includes("hmr") ||
+    url.pathname.includes("turbopack")
+  ) {
+    return;
+  }
 
-      return cached || fetchPromise;
-    })
-  );
+  // API 请求：stale-while-revalidate（先拿缓存，后台更新）
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(apiStrategy(event.request));
+    return;
+  }
+
+  // 页面/静态资源：network-first（开发模式保持最新）
+  event.respondWith(networkFirstStrategy(event.request));
 });
+
+// ── API 策略：缓存优先 + 后台更新 ──
+async function apiStrategy(request) {
+  const cached = await caches.match(request);
+  // 后台发起网络请求更新缓存
+  const fetchPromise = fetch(request)
+    .then(async (response) => {
+      if (response.ok) {
+        const cache = await caches.open(CACHE_API);
+        cache.put(request, response.clone());
+      }
+      return response;
+    })
+    .catch(() => null);
+  // 有缓存立即返回，无缓存等网络
+  return cached || fetchPromise;
+}
+
+// ── 页面策略：网络优先 + 缓存兜底 ──
+async function networkFirstStrategy(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const cache = await caches.open(CACHE_STATIC);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await caches.match(request);
+    return cached || new Response("离线不可用", { status: 503 });
+  }
+}

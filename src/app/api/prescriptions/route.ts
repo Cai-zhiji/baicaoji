@@ -72,6 +72,41 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function DELETE() {
+  try {
+    const count = await prisma.$transaction(async (tx) => {
+      // 获取所有处方明细以退回库存
+      const items = await tx.prescriptionItem.findMany();
+      for (const item of items) {
+        await tx.herb.update({
+          where: { id: item.herbId },
+          data: { stock: { increment: item.grams } },
+        });
+        await tx.stockRecord.create({
+          data: {
+            herbId: item.herbId,
+            type: "in",
+            grams: item.grams,
+            unitPrice: item.unitPrice,
+          },
+        });
+      }
+      // 删除所有随访 → 处方明细 → 处方
+      await tx.followUp.deleteMany();
+      await tx.prescriptionItem.deleteMany();
+      const r = await tx.prescription.deleteMany();
+      return r.count;
+    });
+    return NextResponse.json({
+      success: true,
+      deleted: count,
+      message: `已清空全部 ${count} 条药方（药材库存已退回）`,
+    });
+  } catch {
+    return NextResponse.json({ error: "清空药方失败" }, { status: 500 });
+  }
+}
+
 export async function GET(request: NextRequest) {
   const patientId = request.nextUrl.searchParams.get("patientId");
   const take = parseInt(request.nextUrl.searchParams.get("take") || "50");

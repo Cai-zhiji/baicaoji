@@ -42,6 +42,7 @@ export default function PatientsPage() {
   const [age, setAge] = useState("");
   const [phone, setPhone] = useState("");
   const [importing, setImporting] = useState(false);
+  const [clearing, setClearing] = useState(false);
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Patient | null>(null);
@@ -113,6 +114,24 @@ export default function PatientsPage() {
       toast.error("删除失败");
     } finally {
       setDeleteTarget(null);
+    }
+  }
+
+  async function clearAll() {
+    setClearing(true);
+    try {
+      const res = await fetch("/api/patients", { method: "DELETE" });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success(result.message);
+        setPatients([]);
+      } else {
+        toast.error(result.error || "清空失败");
+      }
+    } catch {
+      toast.error("清空失败");
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -205,6 +224,17 @@ export default function PatientsPage() {
             </div>
           </DialogContent>
         </Dialog>
+        {patients.length > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setClearing(true)}
+            disabled={clearing}
+            className="text-[11px] text-(--muted)"
+          >
+            清空
+          </Button>
+        )}
         </div>
       </div>
 
@@ -265,6 +295,26 @@ export default function PatientsPage() {
           ))
         )}
       </div>
+
+      {/* Clear all confirmation */}
+      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
+        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
+          <DialogHeader>
+            <DialogTitle>确认清空</DialogTitle>
+          </DialogHeader>
+          <p className="text-[14px] text-(--fg-secondary)">
+            确定删除全部 {patients.length} 位病人吗？此操作不可恢复。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearing(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={clearAll}>
+              清空全部
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete confirmation dialog */}
       <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>

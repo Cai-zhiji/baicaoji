@@ -28,6 +28,8 @@ interface Herb {
   pinyin: string;
   sellPrice: number;
   stock: number;
+  unit: string | null;
+  unitGrams: number | null;
 }
 
 interface Template {
@@ -40,6 +42,9 @@ interface DraftItem {
   herbId: number;
   herbName: string;
   grams: number;
+  useAltUnit: boolean; // 是否使用替代单位（枚/个等）显示
+  altUnit: string | null;
+  unitGrams: number | null;
 }
 
 /* ── Helpers ── */
@@ -52,6 +57,11 @@ function herbToOption(h: Herb): ComboboxOption<Herb> {
     meta: (
       <span className="flex items-center gap-2 text-[11px]">
         <span>¥{h.sellPrice.toFixed(2)}/g</span>
+        {h.unit && h.unitGrams && (
+          <Badge variant="outline" className="text-[10px] font-normal">
+            1{h.unit}≈{h.unitGrams}g
+          </Badge>
+        )}
         <Badge variant={h.stock < 50 ? "destructive" : "secondary"} className="text-[10px]">
           {h.stock}g
         </Badge>
@@ -78,6 +88,7 @@ export default function TemplatesPage() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
+  const [clearing, setClearing] = useState(false);
 
   /* ── Data ── */
 
@@ -135,7 +146,19 @@ export default function TemplatesPage() {
   function openEdit(t: Template) {
     setEditing(t);
     setTplName(t.name);
-    setDraftItems(t.items.map((i) => ({ herbId: i.herbId, herbName: i.herbName, grams: i.grams })));
+    setDraftItems(
+      t.items.map((i) => {
+        const herb = herbs.find((h) => h.id === i.herbId);
+        return {
+          herbId: i.herbId,
+          herbName: i.herbName,
+          grams: i.grams,
+          useAltUnit: false,
+          altUnit: herb?.unit ?? null,
+          unitGrams: herb?.unitGrams ?? null,
+        };
+      })
+    );
     setHerbSearch("");
     setOpen(true);
   }
@@ -153,14 +176,53 @@ export default function TemplatesPage() {
       toast.info(`${herb.name} 已在模版中`);
       return;
     }
-    setDraftItems([...draftItems, { herbId: herb.id, herbName: herb.name, grams: 0 }]);
+    setDraftItems([
+      ...draftItems,
+      {
+        herbId: herb.id,
+        herbName: herb.name,
+        grams: 0,
+        useAltUnit: !!herb.unit, // 默认使用替代单位（如果药材配置了）
+        altUnit: herb.unit ?? null,
+        unitGrams: herb.unitGrams ?? null,
+      },
+    ]);
     setHerbSearch("");
   }
 
-  function updateDraftGrams(index: number, grams: number) {
+  function updateDraftGrams(index: number, value: number) {
     const updated = [...draftItems];
-    updated[index].grams = grams;
+    const item = updated[index];
+    if (item.useAltUnit && item.unitGrams) {
+      // 输入的是替代单位数量，转换为克存储
+      item.grams = value * item.unitGrams;
+    } else {
+      item.grams = value;
+    }
     setDraftItems(updated);
+  }
+
+  /** 切换克/替代单位 */
+  function toggleUnit(index: number) {
+    const updated = [...draftItems];
+    const item = updated[index];
+    if (!item.altUnit || !item.unitGrams) return;
+    item.useAltUnit = !item.useAltUnit;
+    setDraftItems(updated);
+  }
+
+  /** 获取当前显示的数值 */
+  function getDisplayValue(item: DraftItem): number {
+    if (item.useAltUnit && item.unitGrams && item.unitGrams > 0) {
+      return parseFloat((item.grams / item.unitGrams).toFixed(1));
+    }
+    return item.grams;
+  }
+
+  /** 获取当前显示的单位 */
+  function getDisplayUnit(item: DraftItem): string {
+    if (item.useAltUnit && item.altUnit) return item.altUnit;
+    return "g";
   }
 
   function removeDraftItem(index: number) {
@@ -219,6 +281,25 @@ export default function TemplatesPage() {
       toast.error("删除失败");
     } finally {
       setDeleteTarget(null);
+      setClearing(false);
+    }
+  }
+
+  async function clearAll() {
+    setClearing(true);
+    try {
+      const res = await fetch("/api/templates", { method: "DELETE" });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success(result.message);
+        setTemplates([]);
+      } else {
+        toast.error(result.error || "清空失败");
+      }
+    } catch {
+      toast.error("清空失败");
+    } finally {
+      setClearing(false);
     }
   }
 
@@ -268,6 +349,17 @@ export default function TemplatesPage() {
             <Plus className="mr-1 h-4 w-4" />
             新建
           </Button>
+          {templates.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setClearing(true)}
+              disabled={clearing}
+              className="text-[11px] text-(--muted)"
+            >
+              清空
+            </Button>
+          )}
         </div>
       </div>
 
@@ -306,7 +398,11 @@ export default function TemplatesPage() {
                       </span>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      {t.items.map((item) => (
+                      {t.items.map((item) => {
+                        const herb = herbs.find((h) => h.id === item.herbId);
+                        const showAlt = herb?.unit && herb?.unitGrams && herb.unitGrams > 0 && item.grams > 0;
+                        const altVal = showAlt ? (item.grams / herb!.unitGrams!).toFixed(1) : null;
+                        return (
                         <Badge
                           key={item.herbId}
                           variant="secondary"
@@ -315,11 +411,15 @@ export default function TemplatesPage() {
                           {item.herbName}
                           {item.grams > 0 && (
                             <span className="ml-0.5 font-[510] tabular-nums">
-                              {item.grams}g
+                              {showAlt
+                                ? `${altVal}${herb!.unit}`
+                                : `${item.grams}g`
+                              }
                             </span>
                           )}
                         </Badge>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                   <div className="flex gap-0.5 shrink-0">
@@ -384,7 +484,10 @@ export default function TemplatesPage() {
               <div className="space-y-2">
                 <Label>药材列表（{draftItems.length} 味）</Label>
                 <div className="max-h-[240px] space-y-1.5 overflow-y-auto">
-                  {draftItems.map((item, idx) => (
+                  {draftItems.map((item, idx) => {
+                    const displayVal = getDisplayValue(item);
+                    const displayUnit = getDisplayUnit(item);
+                    return (
                     <div
                       key={item.herbId}
                       className="flex items-center gap-2 rounded-[var(--radius-sm-val)] border border-(--border) px-3 py-2"
@@ -392,15 +495,31 @@ export default function TemplatesPage() {
                       <span className="min-w-0 flex-1 text-[13px] font-medium truncate">
                         {item.herbName}
                       </span>
-                      <Input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={item.grams || ""}
-                        onChange={(e) => updateDraftGrams(idx, parseFloat(e.target.value) || 0)}
-                        className="h-8 w-20 text-[13px]"
-                        placeholder="克数"
-                      />
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          step={displayUnit === "g" ? "0.5" : "1"}
+                          min="0"
+                          value={displayVal || ""}
+                          onChange={(e) => updateDraftGrams(idx, parseFloat(e.target.value) || 0)}
+                          className="h-8 w-20 text-[13px]"
+                          placeholder={displayUnit === "g" ? "克数" : displayUnit}
+                        />
+                        {item.altUnit && (
+                          <button
+                            type="button"
+                            onClick={() => toggleUnit(idx)}
+                            className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-[510] transition-colors ${
+                              item.useAltUnit
+                                ? "bg-(--accent) text-(--accent-fg)"
+                                : "bg-(--accent-soft) text-(--muted) hover:text-(--fg)"
+                            }`}
+                            title={`切换为${item.useAltUnit ? "克" : item.altUnit}`}
+                          >
+                            {displayUnit}
+                          </button>
+                        )}
+                      </div>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -410,7 +529,8 @@ export default function TemplatesPage() {
                         <X className="h-3 w-3" />
                       </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -419,6 +539,26 @@ export default function TemplatesPage() {
               {editing ? "保存修改" : "创建模版"}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear all confirmation */}
+      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
+        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
+          <DialogHeader>
+            <DialogTitle>确认清空</DialogTitle>
+          </DialogHeader>
+          <p className="text-[14px] text-(--fg-secondary)">
+            确定删除全部 {templates.length} 个模版吗？此操作不可恢复。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearing(false)}>
+              取消
+            </Button>
+            <Button variant="destructive" onClick={clearAll}>
+              清空全部
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

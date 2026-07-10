@@ -6,6 +6,8 @@ export interface CreateHerbInput {
   sellPrice: number;
   costPrice: number;
   stock?: number;
+  unit?: string | null;
+  unitGrams?: number | null;
 }
 
 export interface UpdateHerbInput {
@@ -13,6 +15,8 @@ export interface UpdateHerbInput {
   sellPrice?: number;
   costPrice?: number;
   stock?: number;
+  unit?: string | null;
+  unitGrams?: number | null;
 }
 
 export async function listHerbs() {
@@ -32,6 +36,8 @@ export async function createHerb(input: CreateHerbInput) {
       sellPrice: input.sellPrice,
       costPrice: input.costPrice,
       stock,
+      unit: input.unit ?? null,
+      unitGrams: input.unitGrams ?? null,
     },
   });
 
@@ -78,6 +84,8 @@ export async function updateHerb(id: number, input: UpdateHerbInput) {
       ...(input.sellPrice !== undefined && { sellPrice: input.sellPrice }),
       ...(input.costPrice !== undefined && { costPrice: input.costPrice }),
       ...(input.stock !== undefined && { stock: input.stock }),
+      ...(input.unit !== undefined && { unit: input.unit }),
+      ...(input.unitGrams !== undefined && { unitGrams: input.unitGrams }),
     },
   });
 }

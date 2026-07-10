@@ -18,6 +18,9 @@ model Herb {
   costPrice Float    // 成本/克，精确到分
   stock     Float    @default(0) // 库存克数
 
+  unit      String?  // 替代单位：null/g=克, "枚", "个", "片", "升", "合", "等分"
+  unitGrams Float?   // 1个替代单位 = ?克（如大枣: 1枚≈1g, 附子: 1枚≈9g）
+
   prescriptionItems PrescriptionItem[]
   templateItems     TemplateItem[]
   stockRecords      StockRecord[]

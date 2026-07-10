@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export async function DELETE() {
+  try {
+    const result = await prisma.patient.deleteMany();
+    return NextResponse.json({
+      success: true,
+      deleted: result.count,
+      message: `已清空全部 ${result.count} 位病人`,
+    });
+  } catch {
+    return NextResponse.json({ error: "清空病人失败" }, { status: 500 });
+  }
+}
+
 export async function GET() {
   const patients = await prisma.patient.findMany({ orderBy: { name: "asc" } });
   return NextResponse.json(patients);

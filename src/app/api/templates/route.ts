@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export async function DELETE() {
+  try {
+    // 删除所有模版（TemplateItem 自动级联删除）
+    const result = await prisma.template.deleteMany();
+    return NextResponse.json({
+      success: true,
+      deleted: result.count,
+      message: `已清空全部 ${result.count} 个模版`,
+    });
+  } catch {
+    return NextResponse.json({ error: "清空模版失败" }, { status: 500 });
+  }
+}
+
 export async function GET() {
   const templates = await prisma.template.findMany({
     include: {
