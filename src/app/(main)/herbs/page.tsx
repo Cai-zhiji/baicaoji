@@ -160,7 +160,8 @@ export default function HerbsPage() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-3 pb-3">
       <div className="flex items-center justify-between">
         <h1 className="text-[18px] font-[590] tracking-[-0.01em]">药材管理</h1>
         <div className="flex items-center gap-2">
@@ -273,9 +274,11 @@ export default function HerbsPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
+      </div>
 
-      {/* Herb list */}
-      <div className="panel overflow-hidden">
+      {/* Herb list — A-Z scroll area */}
+      <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-hide">
+      <div className="panel">
         {filtered.length === 0 ? (
           <p className="px-4 py-10 text-center text-[13px] text-(--muted)">
             暂无药材
@@ -351,6 +354,7 @@ export default function HerbsPage() {
             ))}
           </>
         )}
+      </div>
       </div>
 
       {/* Clear all confirmation */}

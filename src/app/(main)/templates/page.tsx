@@ -334,7 +334,8 @@ export default function TemplatesPage() {
   /* ── Render ── */
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-3 pb-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-[18px] font-[590] tracking-[-0.01em]">
@@ -389,9 +390,11 @@ export default function TemplatesPage() {
           />
         </div>
       )}
+      </div>
 
-      {/* Template list */}
-      <div className="panel overflow-hidden">
+      {/* Template list — A-Z scroll area */}
+      <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-hide">
+      <div className="panel">
         {displayed.length === 0 ? (
           <p className="px-4 py-10 text-center text-[13px] text-(--muted)">
             {templates.length === 0
@@ -481,6 +484,7 @@ export default function TemplatesPage() {
             ))}
           </>
         )}
+      </div>
       </div>
 
       {/* Add / Edit dialog */}

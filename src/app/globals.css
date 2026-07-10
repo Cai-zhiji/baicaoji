@@ -255,3 +255,12 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-val);
 }
+
+/* 隐藏原生滚动条但保持可滚动（配合 A-Z 索引条使用） */
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
