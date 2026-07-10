@@ -1,6 +1,46 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const prescription = await prisma.prescription.findUnique({
+      where: { id: parseInt(id) },
+      include: {
+        patient: { select: { id: true, name: true } },
+        items: {
+          include: { herb: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    if (!prescription) {
+      return NextResponse.json({ error: "药方不存在" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      id: prescription.id,
+      patientId: prescription.patientId,
+      patient: prescription.patient,
+      totalPrice: prescription.totalPrice,
+      totalCost: prescription.totalCost,
+      createdAt: prescription.createdAt,
+      items: prescription.items.map((i) => ({
+        herbId: i.herbId,
+        herb: { id: i.herb.id, name: i.herb.name },
+        grams: i.grams,
+        unitPrice: i.unitPrice,
+        unitCost: i.unitCost,
+      })),
+    });
+  } catch {
+    return NextResponse.json({ error: "加载药方失败" }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
