@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +31,7 @@ import { formatDate, getEvaluationColor } from "@/lib/utils";
 import {
   ChevronRight,
   MessageSquarePlus,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 
@@ -72,6 +74,7 @@ const EVALUATIONS = [
 ];
 
 export default function PrescriptionsPage() {
+  const router = useRouter();
   const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
@@ -188,6 +191,13 @@ export default function PrescriptionsPage() {
       setDeleting(false);
     }
   };
+
+  /** 跳转到开方页预填药材（不绑定病人） */
+  function rePrescribe(p: Prescription) {
+    const params = new URLSearchParams();
+    params.set("rxId", p.id.toString());
+    router.push(`/?${params.toString()}`);
+  }
 
   async function clearAll() {
     setClearing(true);
@@ -336,6 +346,14 @@ export default function PrescriptionsPage() {
                   <span>
                     {selected.items.length} 味药
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => { setDetailOpen(false); rePrescribe(selected); }}
+                    className="inline-flex items-center gap-1 text-[11px] text-(--accent) hover:underline"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    再开
+                  </button>
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(selected)}
