@@ -15,8 +15,12 @@ export async function DELETE() {
 }
 
 export async function GET() {
-  const patients = await prisma.patient.findMany({ orderBy: { name: "asc" } });
-  return NextResponse.json(patients);
+  try {
+    const patients = await prisma.patient.findMany({ orderBy: { name: "asc" } });
+    return NextResponse.json(patients);
+  } catch {
+    return NextResponse.json({ error: "加载病人列表失败" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

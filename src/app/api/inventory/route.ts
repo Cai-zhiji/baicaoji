@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { addStock } from "@/services/stock";
 
 export async function GET() {
-  const records = await prisma.stockRecord.findMany({
-    include: { herb: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
-  return NextResponse.json(records);
+  try {
+    const records = await prisma.stockRecord.findMany({
+      include: { herb: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return NextResponse.json(records);
+  } catch {
+    return NextResponse.json({ error: "加载库存记录失败" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -19,32 +24,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "缺少药材或克数" }, { status: 400 });
     }
 
-    const record = await prisma.$transaction(async (tx) => {
-      // Create stock record
-      const created = await tx.stockRecord.create({
-        data: {
-          herbId,
-          type: "in",
-          grams,
-          unitPrice: unitPrice ?? null,
-        },
-      });
-
-      // Update herb stock and cost price
-      const updateData: { stock: { increment: number }; costPrice?: number } = {
-        stock: { increment: grams },
-      };
-      if (unitPrice) {
-        updateData.costPrice = unitPrice;
-      }
-      await tx.herb.update({
-        where: { id: herbId },
-        data: updateData,
-      });
-
-      return created;
-    });
-
+    const record = await addStock(herbId, grams, unitPrice ?? null);
     return NextResponse.json(record, { status: 201 });
   } catch {
     return NextResponse.json({ error: "进货失败" }, { status: 500 });

@@ -24,8 +24,12 @@ export async function DELETE() {
 }
 
 export async function GET() {
-  const herbs = await listHerbs();
-  return NextResponse.json(herbs);
+  try {
+    const herbs = await listHerbs();
+    return NextResponse.json(herbs);
+  } catch {
+    return NextResponse.json({ error: "加载药材列表失败" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {

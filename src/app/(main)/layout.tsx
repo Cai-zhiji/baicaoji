@@ -1,6 +1,7 @@
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { SwRegister } from "@/components/layout/sw-register";
 import { ElderlyToggle } from "@/components/layout/elderly-toggle";
+import { LogoutButton } from "@/components/layout/logout-button";
 
 export default function MainLayout({
   children,
@@ -28,7 +29,10 @@ export default function MainLayout({
           >
             百草计
           </span>
-          <ElderlyToggle />
+          <div className="flex items-center gap-1">
+            <LogoutButton />
+            <ElderlyToggle />
+          </div>
         </header>
 
         {/* Content */}

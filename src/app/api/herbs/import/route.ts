@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseCsvLine } from "@/lib/csv";
-import { toPinyin } from "@/lib/pinyin";
 import { handleApiError } from "@/services/errors";
+import { createHerb } from "@/services/herbs";
 
 export async function POST(request: NextRequest) {
   try {
@@ -74,15 +74,12 @@ export async function POST(request: NextRequest) {
       const unitGrams = unitGramsIdx !== -1 ? (parseFloat(cols[unitGramsIdx]) || null) : null;
 
       try {
-        await prisma.herb.create({
-          data: {
-            name,
-            pinyin: toPinyin(name),
-            sellPrice,
-            costPrice,
-            unit: unit || null,
-            unitGrams: unitGrams || null,
-          },
+        await createHerb({
+          name,
+          sellPrice,
+          costPrice,
+          unit: unit || null,
+          unitGrams: unitGrams || null,
         });
         existingNames.add(name);
         created++;

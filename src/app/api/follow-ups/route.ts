@@ -2,19 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
-  const prescriptionId = request.nextUrl.searchParams.get("prescriptionId");
+  try {
+    const prescriptionId = request.nextUrl.searchParams.get("prescriptionId");
 
-  const followUps = await prisma.followUp.findMany({
-    where: prescriptionId ? { prescriptionId: parseInt(prescriptionId) } : undefined,
-    include: {
-      prescription: {
-        select: { patient: { select: { name: true } } },
+    const followUps = await prisma.followUp.findMany({
+      where: prescriptionId ? { prescriptionId: parseInt(prescriptionId) } : undefined,
+      include: {
+        prescription: {
+          select: { patient: { select: { name: true } } },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json(followUps);
+    return NextResponse.json(followUps);
+  } catch {
+    return NextResponse.json({ error: "加载随访记录失败" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
