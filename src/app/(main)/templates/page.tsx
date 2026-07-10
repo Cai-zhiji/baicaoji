@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/inline-combobox";
 import { toast } from "sonner";
 import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
+import { AzIndex, groupByFirstLetter } from "@/components/ui/az-index";
 import { Trash2, BookOpen, Upload, Search, Plus, Pencil, X } from "lucide-react";
 
 /* ── Types ── */
@@ -408,8 +409,17 @@ export default function TemplatesPage() {
                   `（另有 ${templates.filter((t) => !t.lastUsedAt).length} 个未使用，搜索查看全部）`}
               </p>
             )}
+            <AzIndex
+              labels={displayed.map((t) => t.name)}
+              sectionIdPrefix="tpl"
+            />
+            {groupByFirstLetter(displayed, (t) => t.name).map((group) => (
+              <div key={group.letter} id={`tpl-${group.letter}`}>
+                <div className="sticky top-0 z-10 border-b border-(--border) bg-(--surface) px-4 py-1.5 text-[11px] font-[590] text-(--muted) uppercase">
+                  {group.letter}
+                </div>
           <div className="divide-y divide-(--border)">
-            {displayed.map((t) => (
+            {group.items.map((t) => (
               <div key={t.id} className="px-4 py-3">
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
@@ -467,6 +477,8 @@ export default function TemplatesPage() {
               </div>
             ))}
           </div>
+              </div>
+            ))}
           </>
         )}
       </div>

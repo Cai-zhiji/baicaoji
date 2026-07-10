@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
+import { AzIndex, groupByFirstLetter } from "@/components/ui/az-index";
 import { Plus, Pencil, Trash2, Upload } from "lucide-react";
 
 interface Herb {
@@ -280,7 +281,17 @@ export default function HerbsPage() {
             暂无药材
           </p>
         ) : (
-          filtered.map((herb) => (
+          <>
+            <AzIndex
+              labels={filtered.map((h) => h.name)}
+              sectionIdPrefix="herb"
+            />
+            {groupByFirstLetter(filtered, (h) => h.name).map((group) => (
+              <div key={group.letter} id={`herb-${group.letter}`}>
+                <div className="sticky top-0 z-10 border-b border-(--border) bg-(--surface) px-4 py-1.5 text-[11px] font-[590] text-(--muted) uppercase">
+                  {group.letter}
+                </div>
+                {group.items.map((herb) => (
             <div
               key={herb.id}
               className="flex items-center justify-between border-b border-(--border) px-4 py-3 last:border-b-0"
@@ -335,7 +346,10 @@ export default function HerbsPage() {
                 </div>
               </div>
             </div>
-          ))
+                ))}
+              </div>
+            ))}
+          </>
         )}
       </div>
 

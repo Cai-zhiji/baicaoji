@@ -126,6 +126,7 @@ export default function PrescriptionPage() {
   const herbInputRef = useRef<HTMLInputElement>(null);
 
   const itemsEndRef = useRef<HTMLDivElement>(null);
+  const loadedRxRef = useRef(false); // 防止 StrictMode 双重加载
 
   /* ── Data loading ── */
 
@@ -152,8 +153,9 @@ export default function PrescriptionPage() {
               setSelectedPatient({ id: parseInt(pid), name: pname, gender: "男", age: null });
             }
           }
-          // Pre-fill from existing prescription
-          if (rxId) {
+          // Pre-fill from existing prescription（防止 StrictMode 双重加载）
+          if (rxId && !loadedRxRef.current) {
+            loadedRxRef.current = true;
             fetch(`/api/prescriptions/${rxId}`)
               .then((r) => r.json())
               .then((rx) => {
