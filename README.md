@@ -1,36 +1,205 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 百草计
 
-## Getting Started
+面向中医从业者的轻量级 Web 应用：药材管理、药方计价、病人管理、库存与利润统计。
 
-First, run the development server:
+## 技术栈
+
+| 层 | 技术 |
+|---|---|
+| 前端框架 | Next.js 16 (App Router) + TypeScript |
+| 样式 | Tailwind CSS 4 + shadcn/ui |
+| 组件库 | @base-ui/react |
+| 数据库 | SQLite + Prisma ORM |
+| PWA | Service Worker（仅生产环境） |
+| 部署 | 阿里云轻量服务器 |
+
+## 快速开始
 
 ```bash
+# 安装依赖
+npm install
+
+# 初始化数据库
+npx prisma db push
+
+# 启动开发服务器
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 [http://localhost:3000](http://localhost:3000)。
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 项目结构
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+百草计/
+├── docs/                    # 规划文档
+│   ├── PRD.md               # 产品需求文档
+│   ├── CONTEXT.md            # 领域词汇表
+│   ├── task_plan.md          # 开发计划
+│   ├── findings.md           # 技术调研与踩坑记录
+│   └── progress.md           # 进度日志
+├── prisma/
+│   └── schema.prisma         # 数据模型
+├── public/
+│   ├── manifest.json         # PWA 清单
+│   ├── sw.js                 # Service Worker
+│   └── icon-*.png            # PWA 图标
+├── src/
+│   ├── app/
+│   │   ├── (main)/           # 主布局页面
+│   │   │   ├── page.tsx              # 开方
+│   │   │   ├── patients/             # 病人管理
+│   │   │   ├── herbs/                # 药材管理
+│   │   │   ├── prescriptions/        # 药方记录
+│   │   │   ├── inventory/            # 库存管理
+│   │   │   ├── stats/                # 统计
+│   │   │   └── templates/            # 模版管理
+│   │   ├── api/               # API 路由
+│   │   └── globals.css        # 全局样式（竹素设计系统）
+│   ├── components/
+│   │   ├── layout/            # 布局组件（侧边栏、老年模式等）
+│   │   └── ui/                # shadcn/ui 组件
+│   ├── lib/                   # 工具函数
+│   ├── services/              # 业务逻辑层
+│   └── generated/             # Prisma Client 生成目录
+├── package.json
+└── README.md
+```
 
-## Learn More
+## 功能概览
 
-To learn more about Next.js, take a look at the following resources:
+### 开方（首页）
+- 拼音搜索病人和药材
+- 快速新建病人
+- 药材克数编辑，实时计算总价
+- 库存不足告警
+- 保存为药方模版 / 搜索加载模版（自动填入默认克数）
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 病人管理 `/patients`
+- 增删改查，支持拼音搜索
+- **CSV 批量导入**（详见下方格式说明）
+- 同名病人自动归并
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 药材管理 `/herbs`
+- 增删改查，支持拼音搜索
+- **CSV 批量导入**（详见下方格式说明）
 
-## Deploy on Vercel
+### 药方记录 `/prescriptions`
+- 历史药方列表
+- 随访评价（痊愈 / 显效 / 有效 / 无效 / 加重）
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 库存管理 `/inventory`
+- 药材进货登记
+- 库存扣减（保存药方时自动执行）
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 统计 `/stats`
+- 收入 / 利润概览
+- 药材用量排行
+
+### 老年模式
+- 点击顶栏右侧图标切换
+- 更大字号、更高对比度、更大触控区域
+- 状态持久化到 localStorage
+
+---
+
+## CSV 导入格式
+
+### 药材 CSV
+
+表头支持中文或英文，列顺序任意：
+
+| 列名（中文） | 列名（英文） | 必填 | 说明 |
+|---|---|---|---|
+| 名称 | name | ✅ | 药材中文名，同名会更新售价和成本价 |
+| 售价 | sellPrice / price | — | 每克售价（元），默认 0 |
+| 成本价 | costPrice / cost | — | 每克成本价（元），默认 0 |
+
+**示例 CSV 文件：**
+
+```csv
+名称,售价,成本价
+当归,0.35,0.22
+黄芪,0.28,0.15
+党参,0.42,0.30
+甘草,0.20,0.10
+茯苓,0.18,0.12
+白术,0.32,0.20
+白芍,0.38,0.25
+陈皮,0.15,0.08
+```
+
+> **提示**：可在 Excel / Numbers 中编辑后导出为 CSV UTF-8 格式，或直接用文本编辑器创建。
+
+### 病人 CSV
+
+表头支持中文或英文，列顺序任意：
+
+| 列名（中文） | 列名（英文） | 必填 | 说明 |
+|---|---|---|---|
+| 姓名 | name | ✅ | 病人姓名，同名会更新性别、年龄、电话 |
+| 性别 | gender | — | "男" 或 "女"，默认 "男" |
+| 年龄 | age | — | 整数，默认空 |
+| 电话 / 联系电话 | phone | — | 联系电话，默认空 |
+
+**示例 CSV 文件：**
+
+```csv
+姓名,性别,年龄,电话
+张三,男,35,13800138001
+李四,女,28,
+王五,男,62,13900139002
+赵六,女,45,13700137003
+```
+
+### 药方模版 CSV
+
+表头：`模版名称` + `药材`（药材用 `|` 分隔，每个药材可附带默认克数）：
+
+| 列名 | 必填 | 说明 |
+|---|---|---|
+| 模版名称 / 名称 / name | ✅ | 模版名称，同名会覆盖更新 |
+| 药材 / herbs / items | ✅ | 药材列表，用 `\|` 分隔，如"当归 10g\|黄芪 15g"；克数可选，不写默认为 0 |
+
+**示例 CSV 文件：**
+
+```csv
+模版名称,药材
+补中益气汤,黄芪 15g|党参 10g|白术 10g|当归 8g|陈皮 6g|升麻 3g|柴胡 3g|甘草 5g
+四君子汤,党参 12g|白术 12g|茯苓 12g|甘草 6g
+四物汤,当归 12g|川芎 10g|白芍 12g
+桂枝汤,桂枝 10g|白芍 10g|甘草 6g|生姜 9g|大枣 12g
+```
+
+> **注意**：模版中引用的药材如果尚不存在，会自动创建（售价和成本价均为 0，后续可在药材管理中补充）。
+
+---
+
+## 开发命令
+
+```bash
+npm run dev          # 启动开发服务器（Turbopack）
+npm run build        # 生产构建
+npm start            # 启动生产服务器
+npx prisma generate  # 生成 Prisma Client
+npx prisma db push   # 同步数据库 schema
+npx prisma studio    # 打开数据库管理界面
+```
+
+## 领域规则
+
+- **单人使用**：无多用户、无权限体系
+- **病人以姓名为唯一标识**：同名自动归并（弹窗确认）
+- **药方总价** = Σ(每味药材售价 × 克数)，精确到分
+- **药材搜索**：支持拼音首字母 + 汉字搜索
+- **模版可存默认克数**：保存模版时自动记录当前克数，加载时填入
+- **库存扣减**在保存药方时执行，非添加药材时
+- **价格快照**：开方时快照单价到 prescription_items，后续药材调价不影响历史药方
+
+## 设计系统
+
+百草计使用自研「竹素 v2.0」设计系统：翠玉绿主色 × 冷净微绿中性色 × 液态玻璃质感。详见 `src/app/globals.css`。
+
+## License
+
+MIT

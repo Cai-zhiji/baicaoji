@@ -1,0 +1,110 @@
+// Prisma schema for 百草计
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ---- 药材 ----
+model Herb {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  pinyin    String
+  sellPrice Float    // 售价/克，精确到分
+  costPrice Float    // 成本/克，精确到分
+  stock     Float    @default(0) // 库存克数
+
+  prescriptionItems PrescriptionItem[]
+  templateItems     TemplateItem[]
+  stockRecords      StockRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- 病人 ----
+model Patient {
+  id   Int    @id @default(autoincrement())
+  name String @unique // 姓名唯一
+  gender String // "男" | "女"
+  age   Int?
+  phone String?
+
+  prescriptions Prescription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- 药方 ----
+model Prescription {
+  id        Int      @id @default(autoincrement())
+  patientId Int?
+  patient   Patient?  @relation(fields: [patientId], references: [id])
+  totalPrice Float   @default(0)
+  totalCost  Float   @default(0)
+
+  items     PrescriptionItem[]
+  followUps FollowUp[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- 药方明细 ----
+model PrescriptionItem {
+  id             Int          @id @default(autoincrement())
+  prescriptionId Int
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  herbId         Int
+  herb           Herb         @relation(fields: [herbId], references: [id])
+  grams          Float        // 克数
+  unitPrice      Float        // 开方时药材售价快照
+  unitCost       Float        @default(0) // 开方时药材成本快照
+}
+
+// ---- 药方模版 ----
+model Template {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  items TemplateItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---- 模版明细 ----
+model TemplateItem {
+  id         Int      @id @default(autoincrement())
+  templateId Int
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  herbId     Int
+  herb       Herb     @relation(fields: [herbId], references: [id])
+  grams      Float    @default(0) // 默认克数
+}
+
+// ---- 随访记录 ----
+model FollowUp {
+  id             Int          @id @default(autoincrement())
+  prescriptionId Int
+  prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  evaluation     String       // 痊愈 / 显效 / 有效 / 无效 / 加重
+  note           String?
+  createdAt      DateTime     @default(now())
+}
+
+// ---- 库存记录 ----
+model StockRecord {
+  id        Int      @id @default(autoincrement())
+  herbId    Int
+  herb      Herb     @relation(fields: [herbId], references: [id])
+  type      String   // "in" (进货) | "out" (扣减)
+  grams     Float    // 克数
+  unitPrice Float?   // 进货单价（仅进货时）
+  createdAt DateTime @default(now())
+}

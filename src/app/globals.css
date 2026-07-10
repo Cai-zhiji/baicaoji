@@ -1,26 +1,257 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
+@custom-variant elderly (&:is(.elderly *));
 
+/* ========================================
+   百草计 — 竹素 v2.0
+   翠玉主色 × 冷净微绿中性色 × 液态玻璃
+   ======================================== */
+
+/* ── Tailwind v4 语义色映射（shadcn 兼容）── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono-stack);
+  --font-heading: var(--font-display);
+
+  --color-sidebar-ring: var(--accent);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-accent-foreground: var(--fg);
+  --color-sidebar-accent: var(--accent-soft);
+  --color-sidebar-primary-foreground: var(--on-accent);
+  --color-sidebar-primary: var(--accent);
+  --color-sidebar-foreground: var(--fg);
+  --color-sidebar: var(--bg);
+
+  --color-chart-5: var(--muted);
+  --color-chart-4: var(--fg-secondary);
+  --color-chart-3: var(--info);
+  --color-chart-2: var(--accent-soft-strong);
+  --color-chart-1: var(--accent);
+
+  --color-ring: var(--accent);
+  --color-input: var(--border);
+  --color-border: var(--border);
+  --color-destructive: var(--danger);
+  --color-accent-foreground: var(--fg);
+  --color-accent: var(--accent-soft);
+  --color-muted-foreground: var(--muted);
+  --color-muted: var(--muted-bg);
+  --color-secondary-foreground: var(--fg);
+  --color-secondary: var(--secondary-bg);
+  --color-primary-foreground: var(--on-accent);
+  --color-primary: var(--accent);
+  --color-popover-foreground: var(--fg);
+  --color-popover: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-card: var(--surface);
+
+  --radius-sm: var(--radius-sm-val);
+  --radius-md: var(--radius-val);
+  --radius-lg: var(--radius-lg-val);
+  --radius-xl: var(--radius-xl-val);
+  --radius-2xl: var(--radius-xl-val);
+  --radius-3xl: var(--radius-xl-val);
+  --radius-4xl: var(--radius-xl-val);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ========================================
+   设计令牌：标准模式（竹素）
+   ======================================== */
+:root {
+  /* ── 中性底色（冷净微绿）── */
+  --bg:                 #F4F6F3;   /* 竹素微绿白 */
+  --surface:            #FFFFFF;   /* 纯白卡片 */
+  --surface-elevated:   #FFFFFF;   /* 模态浮起 */
+  --surface-sunken:     #EBEFEA;   /* 下沉分区 */
+  --fg:                 #0F1512;   /* 正文微绿墨黑 18.4:1 AAA */
+  --fg-secondary:       #384039;   /* 次要文字 10.1:1 AAA */
+  --muted:              #6A736C;   /* 辅助/占位 4.9:1 AA */
+  --border:             #DDE3DC;   /* 分割线 */
+  --border-strong:      #B0BAB1;   /* 强调边框 */
+
+  /* ── shadcn 兼容层 ── */
+  --secondary-bg:       #E8ECE7;   /* 次级按钮 */
+  --muted-bg:           #EFF2EE;   /* muted 背景 */
+
+  /* ── 翠玉主色 ── */
+  --accent:             #0F8A5F;   /* 翠玉绿 4.9:1 AA */
+  --accent-hover:       #0A6E4A;   /* 悬停 6.8:1 AAA */
+  --accent-pressed:     #075836;   /* 按下 9.2:1 AAA */
+  --accent-soft:        #D8EEE1;   /* 浅绿选中态（有存在感） */
+  --accent-soft-strong: #B8DDC5;   /* 强调浅绿 */
+  --accent-ring:        rgba(15, 138, 95, 0.20);
+  --on-accent:          #FFFFFF;   /* accent 上的文字 */
+
+  /* ── 语义色（协调绿调）── */
+  --success:            #157F4B;   /* 成功/利润/痊愈 5.8:1 AA */
+  --success-soft:       #D9EFDF;
+  --warn:               #B4610B;   /* 警告/库存紧张 4.7:1 AA */
+  --warn-soft:          #FBEED9;
+  --danger:             #B5261E;   /* 危险/加重 6.4:1 AAA */
+  --danger-soft:        #F7DDD9;
+  --info:               #0A6E9E;   /* 提示/链接 5.4:1 AA */
+  --info-soft:          #DAEBF5;
+
+  /* ── 液态玻璃 ── */
+  --glass-bg:           color-mix(in oklch, var(--surface) 82%, transparent);
+  --glass-bg-light:     color-mix(in oklch, var(--surface) 68%, transparent);
+  --glass-bg-heavy:     color-mix(in oklch, var(--surface) 92%, transparent);
+  --glass-border:       color-mix(in oklch, var(--border) 60%, transparent);
+  --glass-border-light: color-mix(in oklch, var(--border) 40%, transparent);
+  --glass-shadow:       0 1px 3px rgba(20, 30, 22, 0.04), 0 4px 16px rgba(20, 30, 22, 0.05);
+  --glass-shadow-lg:    0 2px 4px rgba(20, 30, 22, 0.03), 0 12px 40px rgba(20, 30, 22, 0.07);
+  --glass-blur:         20px;
+  --glass-blur-lg:      32px;
+
+  /* ── 4px 间距网格 ── */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-12: 48px;
+
+  /* ── 排版 ── */
+  --font-display: 'PingFang SC', 'Noto Sans SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-body:    'PingFang SC', 'Noto Sans SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-mono-stack: 'SF Mono', 'JetBrains Mono', 'Cascadia Code', ui-monospace, Menlo, monospace;
+
+  /* ── 圆角 ── */
+  --radius-sm-val:  8px;
+  --radius-val:    12px;
+  --radius-lg-val: 16px;
+  --radius-xl-val: 24px;
+  --radius-pill:   999px;
+
+  /* shadcn 兼容 */
+  --radius: 0.75rem;
+
+  /* ── 组件高度 ── */
+  --input-h:    44px;
+  --btn-h:      44px;
+  --btn-h-sm:   36px;
+  --tabbar-h:   56px;
+  --topbar-h:   52px;
+
+  /* ── 阴影阶梯（微绿调）── */
+  --shadow-xs:   0 1px 2px rgba(15, 138, 95, 0.04);
+  --shadow-sm:   0 1px 3px rgba(20, 30, 22, 0.05), 0 1px 2px rgba(20, 30, 22, 0.03);
+  --shadow:      0 4px 12px rgba(20, 30, 22, 0.06), 0 2px 4px rgba(20, 30, 22, 0.04);
+  --shadow-lg:   0 12px 32px rgba(20, 30, 22, 0.09), 0 4px 8px rgba(20, 30, 22, 0.04);
+  --shadow-glow: 0 0 0 3px var(--accent-ring);
+}
+
+/* ========================================
+   老年模式覆盖
+   ======================================== */
+.elderly {
+  --fg:             #000000;   /* 纯黑正文 21:1 */
+  --fg-secondary:   #1F2521;   /* 15.8:1 */
+  --muted:          #4F5750;   /* 7.6:1 */
+  --accent:         #086C48;   /* 更深翠玉 6.5:1 */
+  --accent-hover:   #054C31;
+  --border:         #B8C0B8;   /* 更明显边框 */
+  --border-strong:  #8F998F;
+
+  --space-1:  6px;
+  --space-2:  12px;
+  --space-3:  16px;
+  --space-4:  22px;
+  --space-5:  28px;
+  --space-6:  34px;
+  --space-8:  44px;
+
+  --input-h:   52px;
+  --btn-h:     52px;
+  --btn-h-sm:  44px;
+  --tabbar-h:  68px;
+  --topbar-h:  62px;
+}
+
+/* ========================================
+   全局基础层
+   ======================================== */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-(--bg) text-(--fg) font-(--font-body);
+    letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  html {
+    @apply font-(--font-body);
+  }
+
+  /* 数字启用等宽 */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ========================================
+   液态玻璃工具类
+   ======================================== */
+@utility glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+@utility glass-light {
+  background: var(--glass-bg-light);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  border: 1px solid var(--glass-border-light);
+}
+
+@utility glass-heavy {
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(1.2);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-lg);
+}
+
+/* ========================================
+   共享面板样式
+   ======================================== */
+@utility panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-val);
+  box-shadow: var(--shadow-sm);
+}
+
+@utility panel-elevated {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg-val);
+  box-shadow: var(--shadow);
+}
+
+@utility panel-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.15);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-val);
+  box-shadow: var(--glass-shadow);
+}
+
+@utility panel-sunken {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-val);
 }
