@@ -54,6 +54,7 @@ interface PrescriptionItem {
 interface Template {
   id: number;
   name: string;
+  lastUsedAt: string | null;
   items: { herbId: number; herbName: string; grams: number }[];
 }
 
@@ -137,13 +138,38 @@ export default function PrescriptionPage() {
       .then((r) => r.json())
       .then((data) => {
         setPatients(data);
-        // Pre-select patient from URL query param (no need for useSearchParams)
+        // Pre-select patient from URL query param
         if (typeof window !== "undefined") {
           const params = new URLSearchParams(window.location.search);
           const pid = params.get("patientId");
+          const pname = params.get("patientName");
+          const rxId = params.get("rxId");
           if (pid) {
             const p = data.find((x: Patient) => x.id === parseInt(pid));
-            if (p) setSelectedPatient(p);
+            if (p) {
+              setSelectedPatient(p);
+            } else if (pname) {
+              setSelectedPatient({ id: parseInt(pid), name: pname, gender: "男", age: null });
+            }
+          }
+          // Pre-fill from existing prescription
+          if (rxId) {
+            fetch(`/api/prescriptions/${rxId}`)
+              .then((r) => r.json())
+              .then((rx) => {
+                if (rx.items) {
+                  setItems(
+                    rx.items.map((i: { herbId: number; herb: { name: string }; grams: number; unitPrice: number }) => ({
+                      herbId: i.herbId,
+                      herbName: i.herb.name,
+                      grams: i.grams,
+                      unitPrice: i.unitPrice,
+                    }))
+                  );
+                  toast.info(`已加载历史药方（${rx.items.length} 味药），可修改后保存`);
+                }
+              })
+              .catch(() => {});
           }
         }
       })
@@ -297,6 +323,13 @@ export default function PrescriptionPage() {
     setTemplateSearch("");
     toast.success(`已加载模版：${template.name}（${newItems.length} 味药）`);
     setTimeout(() => itemsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+
+    // 标记模版被使用
+    fetch(`/api/templates/${template.id}`, { method: "PATCH" }).catch(() => {});
+    // 乐观更新本地状态
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === template.id ? { ...t, lastUsedAt: new Date().toISOString() } : t))
+    );
   }
 
   async function saveAsTemplate() {
@@ -404,13 +437,50 @@ export default function PrescriptionPage() {
           </span>
         </div>
         <InlineCombobox<Template>
-          options={templates.map(templateToOption)}
+          options={templates
+            .sort((a, b) => {
+              // 最近使用的排前面
+              const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+              const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+              return bTime - aTime;
+            })
+            .map(templateToOption)}
           onSelect={(opt) => loadTemplate(opt.data!)}
           placeholder="搜索药方模版（拼音或汉字）…"
           value={templateSearch}
           onChange={setTemplateSearch}
           maxResults={6}
-          showAllOnEmpty
+          showAllOnEmpty={false}
+          emptyState={
+            templates
+              .sort((a, b) => {
+                const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+                const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+                return bTime - aTime;
+              })
+              .slice(0, 5)
+              .map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => loadTemplate(t)}
+                  className="flex w-full items-center justify-between rounded-[var(--radius-sm-val)] px-3 py-2.5 text-[14px] transition-colors hover:bg-(--accent-soft)"
+                >
+                  <span className="font-medium">{t.name}</span>
+                  <span className="text-[11px] text-(--muted)">
+                    {t.items.length} 味
+                    {t.lastUsedAt && (
+                      <span className="ml-1.5">
+                        {new Date(t.lastUsedAt).toLocaleDateString("zh-CN", {
+                          month: "2-digit",
+                          day: "2-digit",
+                        })}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))
+          }
         />
       </div>
 

@@ -28,6 +28,7 @@ export async function GET() {
   const result = templates.map((t) => ({
     id: t.id,
     name: t.name,
+    lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
     items: t.items.map((ti) => ({
       herbId: ti.herbId,
       herbName: ti.herb.name,

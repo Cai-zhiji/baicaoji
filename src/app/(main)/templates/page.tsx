@@ -35,6 +35,7 @@ interface Herb {
 interface Template {
   id: number;
   name: string;
+  lastUsedAt: string | null;
   items: { herbId: number; herbName: string; grams: number }[];
 }
 
@@ -307,7 +308,14 @@ export default function TemplatesPage() {
 
   const herbOptions: ComboboxOption<Herb>[] = herbs.map(herbToOption);
 
-  const filtered = templates.filter((t) => {
+  // 最近使用的排前面；无搜索时只展示最近 5 个
+  const templatesSorted = [...templates].sort((a, b) => {
+    const aTime = a.lastUsedAt ? new Date(a.lastUsedAt).getTime() : 0;
+    const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+
+  const filtered = templatesSorted.filter((t) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
@@ -316,6 +324,11 @@ export default function TemplatesPage() {
       toPinyinInitials(t.name).includes(q)
     );
   });
+
+  // 无搜索时只展示最近 5 个（或有使用记录的模板）
+  const displayed = search
+    ? filtered
+    : filtered.filter((t) => t.lastUsedAt).slice(0, 5);
 
   /* ── Render ── */
 
@@ -378,15 +391,25 @@ export default function TemplatesPage() {
 
       {/* Template list */}
       <div className="panel overflow-hidden">
-        {filtered.length === 0 ? (
+        {displayed.length === 0 ? (
           <p className="px-4 py-10 text-center text-[13px] text-(--muted)">
             {templates.length === 0
               ? "暂无模版。点击「新建」创建模版，或通过 CSV 批量导入。"
-              : "无匹配结果。"}
+              : search
+                ? "无匹配结果。"
+                : "暂无使用记录。搜索或输入以查看全部模版。"}
           </p>
         ) : (
+          <>
+            {!search && templates.filter((t) => t.lastUsedAt).length > 5 && (
+              <p className="px-4 py-2 text-center text-[11px] text-(--muted)">
+                最近使用的 5 个模版
+                {templates.filter((t) => !t.lastUsedAt).length > 0 &&
+                  `（另有 ${templates.filter((t) => !t.lastUsedAt).length} 个未使用，搜索查看全部）`}
+              </p>
+            )}
           <div className="divide-y divide-(--border)">
-            {filtered.map((t) => (
+            {displayed.map((t) => (
               <div key={t.id} className="px-4 py-3">
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
@@ -444,6 +467,7 @@ export default function TemplatesPage() {
               </div>
             ))}
           </div>
+          </>
         )}
       </div>
 

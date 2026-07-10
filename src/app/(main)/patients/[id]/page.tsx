@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { formatDate, getEvaluationColor } from "@/lib/utils";
-import { ArrowLeft, PenLine } from "lucide-react";
+import { ArrowLeft, PenLine, Copy, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface FollowUp {
@@ -75,6 +75,26 @@ export default function PatientDetailPage() {
     0
   );
 
+  /** 复制药方内容到剪贴板 */
+  function copyPrescription(p: Prescription) {
+    const text = p.items
+      .map((i) => `${i.herb.name} ${i.grams}g`)
+      .join("、");
+    navigator.clipboard.writeText(text).then(
+      () => toast.success("药方已复制"),
+      () => toast.error("复制失败")
+    );
+  }
+
+  /** 跳转到开方页，预填相同药材 */
+  function rePrescribe(p: Prescription) {
+    const params = new URLSearchParams();
+    params.set("patientId", patient!.id.toString());
+    params.set("patientName", patient!.name);
+    params.set("rxId", p.id.toString());
+    router.push(`/?${params.toString()}`);
+  }
+
   return (
     <div className="space-y-3">
       <Link
@@ -138,9 +158,29 @@ export default function PatientDetailPage() {
                 <span className="text-[12px] text-(--muted)">
                   {formatDate(p.createdAt)}
                 </span>
-                <span className="text-[15px] font-[590] tabular-nums">
-                  ¥{p.totalPrice.toFixed(2)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); copyPrescription(p); }}
+                    className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] px-2 py-1 text-[11px] text-(--muted) transition-colors hover:bg-(--accent-soft) hover:text-(--fg)"
+                    title="复制药方"
+                  >
+                    <Copy className="h-3 w-3" />
+                    复制
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); rePrescribe(p); }}
+                    className="inline-flex items-center gap-1 rounded-[var(--radius-pill)] bg-(--accent-soft) px-2 py-1 text-[11px] font-[510] text-(--accent) transition-colors hover:bg-(--accent)"
+                    title="再开一次相同方剂"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    再开
+                  </button>
+                  <span className="text-[15px] font-[590] tabular-nums">
+                    ¥{p.totalPrice.toFixed(2)}
+                  </span>
+                </div>
               </div>
               <div className="flex flex-wrap gap-1.5 border-t border-(--border) px-4 pt-2 pb-3">
                 {p.items.map((item) => (

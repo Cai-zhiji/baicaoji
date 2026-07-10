@@ -31,6 +31,8 @@ export interface InlineComboboxProps<T = unknown> {
   renderEmpty?: (query: string) => React.ReactNode;
   /** 空 query 时是否展示全量（默认 false，空 query 收起） */
   showAllOnEmpty?: boolean;
+  /** 空 query 时的自定义内容（如最近使用的列表） */
+  emptyState?: React.ReactNode;
   /** 每次选中后是否清空输入框（默认 true） */
   clearOnSelect?: boolean;
   className?: string;
@@ -50,6 +52,7 @@ export function InlineCombobox<T = unknown>({
   maxResults = 5,
   renderEmpty,
   showAllOnEmpty = false,
+  emptyState,
   clearOnSelect = true,
   className,
   inputClassName,
@@ -178,7 +181,7 @@ export function InlineCombobox<T = unknown>({
                     type="button"
                     disabled={opt.disabled}
                     onMouseDown={(e) => {
-                      e.preventDefault(); // 避免抢走 input focus 导致 blur 先触发
+                      e.preventDefault();
                       handleSelect(opt);
                     }}
                     onMouseEnter={() => setActiveIdx(i)}
@@ -200,6 +203,8 @@ export function InlineCombobox<T = unknown>({
                 </li>
               ))}
             </ul>
+          ) : emptyState && !query ? (
+            <div className="max-h-[320px] overflow-y-auto">{emptyState}</div>
           ) : (
             <div className="px-4 py-3">{renderEmpty?.(query)}</div>
           )}

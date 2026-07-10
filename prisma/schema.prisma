@@ -72,10 +72,10 @@ model PrescriptionItem {
 
 // ---- 药方模版 ----
 model Template {
-  id   Int    @id @default(autoincrement())
-  name String @unique
-
-  items TemplateItem[]
+  id         Int           @id @default(autoincrement())
+  name       String        @unique
+  lastUsedAt DateTime?
+  items      TemplateItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
