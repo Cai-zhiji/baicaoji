@@ -30,6 +30,7 @@ import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
 import { formatDate, getEvaluationColor } from "@/lib/utils";
 import {
   ChevronRight,
+  Copy,
   MessageSquarePlus,
   RotateCcw,
   Trash2,
@@ -199,6 +200,20 @@ export default function PrescriptionsPage() {
     router.push(`/?${params.toString()}`);
   }
 
+  /** 复制药方到剪贴板 */
+  async function copyPrescription(p: Prescription) {
+    const text = p.items
+      .map((item) => `${item.herb.name} ${item.grams}g`)
+      .join("、");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("药方已复制到剪贴板");
+    } catch {
+      toast.error("复制失败，请手动复制");
+    }
+  }
+
   async function clearAll() {
     setClearing(true);
     try {
@@ -346,6 +361,14 @@ export default function PrescriptionsPage() {
                   <span>
                     {selected.items.length} 味药
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => copyPrescription(selected)}
+                    className="inline-flex items-center gap-1 text-[11px] text-(--muted) hover:text-(--fg)"
+                  >
+                    <Copy className="h-3 w-3" />
+                    复制
+                  </button>
                   <button
                     type="button"
                     onClick={() => { setDetailOpen(false); rePrescribe(selected); }}
