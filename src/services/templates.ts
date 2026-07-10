@@ -8,7 +8,11 @@ const templateInclude = {
 
 /** 序列化模版为前端 DTO */
 function toDTO(
-  t: Awaited<ReturnType<typeof prisma.template.findFirst<{ include: typeof templateInclude }>>>,
+  t: Awaited<
+    ReturnType<
+      typeof prisma.template.findFirst<{ include: typeof templateInclude }>
+    >
+  >,
 ) {
   if (!t) return null;
   return {
@@ -17,10 +21,17 @@ function toDTO(
     lastUsedAt: t.lastUsedAt?.toISOString() ?? null,
     items: t.items.map((ti) => ({
       herbId: ti.herbId,
-      herbName: ti.herb.name,
+      herbName: ti.herbName ?? ti.herb?.name ?? "未知药材",
       grams: ti.grams,
+      herbExists: ti.herbId !== null,
     })),
   };
+}
+
+interface CreateItemInput {
+  herbId?: number | null;
+  herbName: string;
+  grams?: number;
 }
 
 export async function listTemplates() {
@@ -33,14 +44,15 @@ export async function listTemplates() {
 
 export async function createTemplate(
   name: string,
-  items: { herbId: number; grams?: number }[],
+  items: CreateItemInput[],
 ) {
   const template = await prisma.template.create({
     data: {
       name,
       items: {
         create: items.map((item) => ({
-          herbId: item.herbId,
+          herbId: item.herbId ?? null,
+          herbName: item.herbName,
           grams: item.grams ?? 0,
         })),
       },
@@ -53,7 +65,7 @@ export async function createTemplate(
 export async function updateTemplate(
   id: number,
   name: string,
-  items: { herbId: number; grams?: number }[],
+  items: CreateItemInput[],
 ) {
   const template = await prisma.template.update({
     where: { id },
@@ -62,7 +74,8 @@ export async function updateTemplate(
       items: {
         deleteMany: {},
         create: items.map((item) => ({
-          herbId: item.herbId,
+          herbId: item.herbId ?? null,
+          herbName: item.herbName,
           grams: item.grams ?? 0,
         })),
       },

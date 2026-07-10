@@ -22,7 +22,14 @@ export async function getStats(period: "all" | "monthly" | "quarterly") {
     where,
     include: {
       items: {
-        include: { herb: { select: { name: true } } },
+        select: {
+          herbId: true,
+          herbName: true,
+          grams: true,
+          unitPrice: true,
+          unitCost: true,
+          herb: { select: { name: true } },
+        },
       },
     },
   });
@@ -35,12 +42,25 @@ export async function getStats(period: "all" | "monthly" | "quarterly") {
   const herbMap = new Map<string, { revenue: number; cost: number }>();
   for (const p of prescriptions) {
     for (const item of p.items) {
-      const name = item.herb.name;
+      const name = item.herb?.name ?? item.herbName;
       const existing = herbMap.get(name) ?? { revenue: 0, cost: 0 };
       herbMap.set(name, {
         revenue: existing.revenue + item.unitPrice * item.grams,
         cost: existing.cost + item.unitCost * item.grams,
       });
+    }
+  }
+
+  // 药材出现次数（单次遍历）
+  const prescriptionCounts = new Map<string, number>();
+  for (const p of prescriptions) {
+    const seen = new Set<string>();
+    for (const item of p.items) {
+      const name = item.herb?.name ?? item.herbName;
+      if (!seen.has(name)) {
+        seen.add(name);
+        prescriptionCounts.set(name, (prescriptionCounts.get(name) ?? 0) + 1);
+      }
     }
   }
 
@@ -50,9 +70,7 @@ export async function getStats(period: "all" | "monthly" | "quarterly") {
       revenue: roundToCent(revenue),
       cost: roundToCent(cost),
       profit: roundToCent(revenue - cost),
-      prescriptionCount: prescriptions.filter((p) =>
-        p.items.some((i) => i.herb.name === name),
-      ).length,
+      prescriptionCount: prescriptionCounts.get(name) ?? 0,
     }))
     .sort((a, b) => b.profit - a.profit);
 

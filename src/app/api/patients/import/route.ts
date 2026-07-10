@@ -73,8 +73,8 @@ export async function POST(request: NextRequest) {
       const genderRaw = genderIdx !== -1 ? cols[genderIdx]?.trim() : "";
       const gender =
         genderRaw === "女" ? "女" : genderRaw === "男" ? "男" : "男";
-      const age =
-        ageIdx !== -1 ? parseInt(cols[ageIdx]) || null : null;
+      const ageRaw = ageIdx !== -1 ? parseInt(cols[ageIdx]) : NaN;
+      const age = isNaN(ageRaw) ? null : ageRaw;
       const phone =
         phoneIdx !== -1 ? cols[phoneIdx]?.trim() || null : null;
 

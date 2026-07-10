@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { parseCsvLine } from "@/lib/csv";
-import { toPinyin } from "@/lib/pinyin";
 import { handleApiError } from "@/services/errors";
 
 /**
@@ -97,9 +96,10 @@ export async function POST(request: NextRequest) {
 
     // Preload all herbs + existing templates
     const allHerbs = await prisma.herb.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, unitGrams: true },
     });
     const herbMap = new Map(allHerbs.map((h) => [h.name, h.id]));
+    const herbUnitMap = new Map(allHerbs.map((h) => [h.id, h.unitGrams]));
     const existingTemplates = await prisma.template.findMany({
       select: { name: true },
     });
@@ -141,37 +141,30 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const templateItems: Array<{ herbId: number; grams: number }> = [];
+      const templateItems: Array<{ herbId: number | null; herbName: string; grams: number }> = [];
+      let unmatchedHerbs = 0;
       for (const raw of rawItems) {
         const { name, grams, unit, unitVal } = parseHerbWithGrams(raw);
-        let id = herbMap.get(name);
+        const id = herbMap.get(name) ?? null;
         let finalGrams = grams;
 
-        // 药材不存在则自动创建
-        if (!id) {
-          const herb = await prisma.herb.create({
-            data: {
-              name,
-              pinyin: toPinyin(name),
-              sellPrice: 0,
-              costPrice: 0,
-              unit: unit ?? null,
-            },
-          });
-          id = herb.id;
-          herbMap.set(name, id);
-        }
-
-        // 如果有替代单位（如 枚/个），通过药材的 unitGrams 转换为克
-        if (unit && unitVal && grams === 0) {
-          const herb = await prisma.herb.findUnique({
-            where: { id },
-            select: { unitGrams: true },
-          });
-          if (herb?.unitGrams) {
-            finalGrams = unitVal * herb.unitGrams;
-          } else {
-            // 默认转换
+        // 药材存在 → 关联 herbId + 单位转换
+        if (id) {
+          if (unit && unitVal && grams === 0) {
+            const unitGrams = herbUnitMap.get(id);
+            if (unitGrams) {
+              finalGrams = unitVal * unitGrams;
+            } else {
+              const defaultConversions: Record<string, number> = {
+                '枚': 1, '个': 0.4, '片': 3, '升': 20, '合': 2,
+              };
+              finalGrams = unitVal * (defaultConversions[unit] || 1);
+            }
+          }
+        } else {
+          // 药材不存在 → 仅保留名称，保证方剂完整性
+          unmatchedHerbs++;
+          if (unit && unitVal) {
             const defaultConversions: Record<string, number> = {
               '枚': 1, '个': 0.4, '片': 3, '升': 20, '合': 2,
             };
@@ -179,7 +172,11 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        templateItems.push({ herbId: id, grams: finalGrams });
+        templateItems.push({ herbId: id, herbName: name, grams: finalGrams });
+      }
+
+      if (unmatchedHerbs > 0) {
+        errors.push(`模版「${tplName}」有 ${unmatchedHerbs} 味药材未录入系统，仅保留名称`);
       }
 
       if (templateItems.length === 0) {

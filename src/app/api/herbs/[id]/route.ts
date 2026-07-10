@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleApiError } from "@/services/errors";
 import { updateHerb, deleteHerb } from "@/services/herbs";
+import { parseId } from "@/lib/validate";
 
 export async function PUT(
   request: NextRequest,
@@ -8,10 +9,15 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    const numericId = parseId(id);
+    if (isNaN(numericId)) {
+      return NextResponse.json({ error: "无效的药材ID" }, { status: 400 });
+    }
+
     const data = await request.json();
     const { name, sellPrice, costPrice, stock, unit, unitGrams } = data;
 
-    const herb = await updateHerb(parseInt(id), {
+    const herb = await updateHerb(numericId, {
       ...(name !== undefined && { name }),
       ...(sellPrice !== undefined && { sellPrice }),
       ...(costPrice !== undefined && { costPrice }),
@@ -32,7 +38,12 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await deleteHerb(parseInt(id));
+    const numericId = parseId(id);
+    if (isNaN(numericId)) {
+      return NextResponse.json({ error: "无效的药材ID" }, { status: 400 });
+    }
+
+    await deleteHerb(numericId);
     return NextResponse.json({ success: true });
   } catch (err) {
     return handleApiError(err, "删除失败，该药材可能已被使用");

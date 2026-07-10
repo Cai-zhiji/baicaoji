@@ -14,10 +14,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "缺少药方明细" }, { status: 400 });
     }
 
+    // 验证每个 item 的必填字段
+    for (const item of items) {
+      if (!item.herbName || item.grams == null || item.grams <= 0) {
+        return NextResponse.json(
+          { error: `药材「${item.herbName || "未知"}」缺少名称或克数无效` },
+          { status: 400 }
+        );
+      }
+      if (item.unitPrice == null || item.unitPrice < 0) {
+        return NextResponse.json(
+          { error: `药材「${item.herbName}」单价无效` },
+          { status: 400 }
+        );
+      }
+    }
+
     const prescription = await createPrescription(patientId, items);
     return NextResponse.json(prescription, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "保存药方失败" }, { status: 500 });
+  } catch (e) {
+    console.error("[POST /api/prescriptions]", e instanceof Error ? e.message : e);
+    return NextResponse.json({ error: (e as Error).message || "保存药方失败" }, { status: 500 });
   }
 }
 

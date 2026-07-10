@@ -11,23 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
 import { AzIndex, groupByFirstLetter } from "@/components/ui/az-index";
-import { Plus, Pencil, Trash2, Upload } from "lucide-react";
-
-interface Herb {
-  id: number;
-  name: string;
-  pinyin: string;
-  sellPrice: number;
-  costPrice: number;
-  stock: number;
-  unit: string | null;
-  unitGrams: number | null;
-}
+import { Plus, Pencil, Trash2, Upload, Search, Loader2 } from "lucide-react";
+import { useMutation } from "@/lib/use-mutation";
+import type { Herb } from "@/lib/types";
 
 export default function HerbsPage() {
   const [herbs, setHerbs] = useState<Herb[]>([]);
@@ -42,7 +33,17 @@ export default function HerbsPage() {
   const [unitGrams, setUnitGrams] = useState("");
   const [importing, setImporting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Herb | null>(null);
-  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const { execute: clearAllHerbs, loading: clearing } = useMutation<{ message?: string }>({
+    url: "/api/herbs",
+    method: "DELETE",
+    onSuccess: (result) => {
+      toast.success(result?.message || "已清空");
+      setHerbs([]);
+    },
+    errorMessage: "清空失败",
+  });
 
   async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -68,19 +69,36 @@ export default function HerbsPage() {
     }
   }
 
+  const [initialLoading, setInitialLoading] = useState(true);
+
   useEffect(() => {
-    fetch("/api/herbs").then((r) => r.json()).then(setHerbs);
+    fetch("/api/herbs")
+      .then((r) => r.json())
+      .then((data) => { setHerbs(data); setInitialLoading(false); })
+      .catch(() => { toast.error("加载药材失败"); setInitialLoading(false); });
   }, []);
 
-  const filtered = herbs.filter((h) => {
+  // 按最近使用排序（updatedAt 在开方扣库存时会自动更新）
+  const herbsSorted = [...herbs].sort(
+    (a, b) => new Date(b.updatedAt ?? 0).getTime() - new Date(a.updatedAt ?? 0).getTime()
+  );
+
+  const filtered = herbsSorted.filter((h) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      h.name.includes(q) ||
-      h.pinyin.includes(q) ||
-      toPinyinInitials(h.name).includes(q)
-    );
+    try {
+      return (
+        h.name.includes(q) ||
+        h.pinyin.includes(q) ||
+        toPinyinInitials(h.name).includes(q)
+      );
+    } catch {
+      return h.name.includes(q);
+    }
   });
+
+  // 无搜索时只展示最近使用的 5 个
+  const displayed = search ? filtered : filtered.slice(0, 20);
 
   function reset() {
     setName("");
@@ -132,7 +150,9 @@ export default function HerbsPage() {
       const res = await fetch(`/api/herbs/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("药材已删除");
-        setHerbs(herbs.filter((h) => h.id !== id));
+        setHerbs((prev) => prev.filter((h) => h.id !== id));
+      } else {
+        toast.error("删除失败");
       }
     } catch {
       toast.error("删除失败");
@@ -142,21 +162,16 @@ export default function HerbsPage() {
   }
 
   async function clearAll() {
-    setClearing(true);
-    try {
-      const res = await fetch("/api/herbs", { method: "DELETE" });
-      const result = await res.json();
-      if (res.ok) {
-        toast.success(result.message);
-        setHerbs([]);
-      } else {
-        toast.error(result.error || "清空失败");
-      }
-    } catch {
-      toast.error("清空失败");
-    } finally {
-      setClearing(false);
-    }
+    await clearAllHerbs();
+    setShowClearConfirm(false);
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-5 w-5 animate-spin text-(--muted)" />
+      </div>
+    );
   }
 
   return (
@@ -191,7 +206,7 @@ export default function HerbsPage() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setClearing(true)}
+                onClick={() => setShowClearConfirm(true)}
                 disabled={clearing}
                 className="text-[11px] text-(--muted)"
               >
@@ -269,27 +284,42 @@ export default function HerbsPage() {
       </div>
 
       {/* Search */}
-      <Input
-        placeholder="搜索药材（名称或拼音）…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      {herbs.length > 0 && (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-(--muted)" />
+          <Input
+            placeholder="搜索药材（名称或拼音）…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="!h-10 !rounded-[var(--radius-val)] !pl-10"
+          />
+        </div>
+      )}
       </div>
 
       {/* Herb list — A-Z scroll area */}
       <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-hide">
       <div className="panel">
-        {filtered.length === 0 ? (
+        {displayed.length === 0 ? (
           <p className="px-4 py-10 text-center text-[13px] text-(--muted)">
-            暂无药材
+            {herbs.length === 0
+              ? "暂无药材。点击「添加」录入药材，或通过 CSV 批量导入。"
+              : search
+                ? "无匹配结果。"
+                : "暂无使用记录。搜索或输入以查看全部药材。"}
           </p>
         ) : (
           <>
+            {!search && herbs.length > 20 && (
+              <p className="px-4 py-2 text-center text-[11px] text-(--muted)">
+                最近使用的 20 种药材（共 {herbs.length} 种，搜索查看全部）
+              </p>
+            )}
             <AzIndex
-              labels={filtered.map((h) => h.name)}
+              labels={displayed.map((h) => h.name)}
               sectionIdPrefix="herb"
             />
-            {groupByFirstLetter(filtered, (h) => h.name).map((group) => (
+            {groupByFirstLetter(displayed, (h) => h.name).map((group) => (
               <div key={group.letter} id={`herb-${group.letter}`}>
                 <div className="sticky top-0 z-10 border-b border-(--border) bg-(--surface) px-4 py-1.5 text-[11px] font-[590] text-(--muted) uppercase">
                   {group.letter}
@@ -358,47 +388,27 @@ export default function HerbsPage() {
       </div>
 
       {/* Clear all confirmation */}
-      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认清空</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除全部 {herbs.length} 种药材吗？药方明细和模版明细也将一并清空，此操作不可恢复。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearing(false)}>
-              取消
-            </Button>
-            <Button variant="destructive" onClick={clearAll}>
-              清空全部
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showClearConfirm && !deleteTarget}
+        onOpenChange={(v) => { if (!v) setShowClearConfirm(false); }}
+        title="确认清空"
+        message={`确定删除全部 ${herbs.length} 种药材吗？药方明细和模版明细也将一并清空，此操作不可恢复。`}
+        confirmLabel="清空全部"
+        variant="destructive"
+        onConfirm={clearAll}
+        loading={clearing}
+      />
 
       {/* Delete confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除药材「{deleteTarget?.name}」吗？
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && remove(deleteTarget.id)}
-            >
-              删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title="确认删除"
+        message={`确定删除药材「${deleteTarget?.name}」吗？`}
+        confirmLabel="删除"
+        variant="destructive"
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }

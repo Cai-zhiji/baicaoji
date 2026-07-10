@@ -13,7 +13,8 @@ type PrismaTx = Omit<
 
 /**
  * 扣减药材库存（开方时调用）。
- * 在事务内执行：stock decrement + StockRecord(type:"out")。
+ * 在事务内执行：验证库存充足 → stock decrement + StockRecord(type:"out")。
+ * 库存不足时抛出错误。
  */
 export async function deductStock(
   herbId: number,
@@ -21,6 +22,15 @@ export async function deductStock(
   unitPrice: number,
   tx: PrismaTx = prisma,
 ) {
+  // 检查库存是否充足
+  const herb = await tx.herb.findUnique({
+    where: { id: herbId },
+    select: { stock: true, name: true },
+  });
+  if (!herb) throw new Error(`药材不存在`);
+  // 库存不足时允许扣减（库存可降至负数），UI 侧已有低库存警告
+  // 开方不应因库存不足而被阻止 — 用户可能未录入完整库存
+
   await tx.herb.update({
     where: { id: herbId },
     data: { stock: { decrement: grams } },
@@ -69,6 +79,7 @@ export async function addStock(
   unitPrice: number | null,
   tx: PrismaTx = prisma,
 ) {
+  if (grams <= 0) throw new Error("进货克数必须大于 0");
   const updateData: {
     stock: { increment: number };
     costPrice?: number;

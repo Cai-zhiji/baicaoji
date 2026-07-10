@@ -3,47 +3,48 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useApi } from "@/lib/use-api";
-
-interface HerbBreakdown {
-  name: string;
-  revenue: number;
-  cost: number;
-  profit: number;
-  prescriptionCount: number;
-}
-
-interface Stats {
-  totalRevenue: number;
-  totalCost: number;
-  totalProfit: number;
-  prescriptionCount: number;
-  herbBreakdown: HerbBreakdown[];
-}
+import type { HerbBreakdownItem, StatsData } from "@/lib/types";
 
 export default function StatsPage() {
   const [period, setPeriod] = useState("all");
   const params = period !== "all" ? `?period=${period}` : "";
-  const { data: stats } = useApi<Stats>(`/api/stats${params}`);
+  const { data: stats, loading, error } = useApi<StatsData>(`/api/stats${params}`);
+  const [exporting, setExporting] = useState(false);
 
   async function exportData() {
+    setExporting(true);
     try {
       const res = await fetch("/api/export");
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `百草计_数据导出_${new Date().toISOString().slice(0, 10)}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        toast.success("数据已导出");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "导出失败" }));
+        toast.error(err.error || "导出失败");
+        return;
       }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `百草计_数据导出_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("数据已导出");
     } catch {
       toast.error("导出失败");
+    } finally {
+      setExporting(false);
     }
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-3">
+        <h1 className="text-[18px] font-[590]">利润统计</h1>
+        <p className="text-[13px] text-(--danger)">加载失败：{error}</p>
+      </div>
+    );
   }
 
   const formatCNY = (val: number) => `¥${val.toFixed(2)}`;
@@ -52,9 +53,9 @@ export default function StatsPage() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h1 className="text-[18px] font-[590] tracking-[-0.01em]">利润统计</h1>
-        <Button size="sm" variant="outline" onClick={exportData}>
-          <Download className="mr-1 h-4 w-4" />
-          导出
+        <Button size="sm" variant="outline" onClick={exportData} disabled={exporting}>
+          {exporting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Download className="mr-1 h-4 w-4" />}
+          {exporting ? "导出中…" : "导出"}
         </Button>
       </div>
 

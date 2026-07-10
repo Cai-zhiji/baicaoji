@@ -47,9 +47,10 @@ export interface PatientOption {
 /* ── 药方 Prescription ── */
 
 export interface PrescriptionItem {
-  herbId: number;
+  id?: number;
+  herbId: number | null;
   herbName: string;
-  herb?: { id: number; name: string };
+  herb?: { id: number; name: string } | null;
   grams: number;
   unitPrice: number;
   unitCost: number;
@@ -57,20 +58,23 @@ export interface PrescriptionItem {
 
 export interface Prescription {
   id: number;
-  patientId: number;
+  patientId: number | null;
   patient?: { id: number; name: string } | null;
   totalPrice: number;
   totalCost: number;
   createdAt: Date | string;
   items: PrescriptionItem[];
+  followUps?: FollowUp[];
 }
 
 /* ── 药方模版 Template ── */
 
 export interface TemplateItem {
-  herbId: number;
+  herbId: number | null;
   herbName: string;
   grams: number;
+  /** 是否在药材系统中存在（false 表示仅保留名称，方剂完整性用） */
+  herbExists: boolean;
 }
 
 export interface Template {
@@ -82,7 +86,8 @@ export interface Template {
 
 /** 模版输入项（创建/更新用） */
 export interface TemplateItemInput {
-  herbId: number;
+  herbId?: number | null;
+  herbName: string;
   grams?: number;
 }
 
@@ -104,7 +109,7 @@ export interface FollowUp {
   id: number;
   prescriptionId: number;
   evaluation: string;
-  description: string | null;
+  note: string | null;
   createdAt: Date | string;
 }
 

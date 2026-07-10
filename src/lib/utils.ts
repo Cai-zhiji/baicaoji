@@ -31,6 +31,7 @@ export function formatDate(
 /** Get the CSS class for a follow-up evaluation badge */
 export function getEvaluationColor(evaluation: string): string {
   if (evaluation === "痊愈" || evaluation === "显效") return "text-(--success)";
+  if (evaluation === "有效") return "text-(--info)";
   if (evaluation === "无效") return "text-(--warn)";
   if (evaluation === "加重") return "text-(--danger)";
   return "";

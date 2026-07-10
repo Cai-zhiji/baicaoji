@@ -34,7 +34,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      await router.push("/");
       router.refresh();
     } catch {
       setError("网络错误，请重试");

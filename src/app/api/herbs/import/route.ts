@@ -68,18 +68,19 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      const sellPrice = sellPriceIdx !== -1 ? parseFloat(cols[sellPriceIdx]) || 0 : 0;
-      const costPrice = costPriceIdx !== -1 ? parseFloat(cols[costPriceIdx]) || 0 : 0;
+      const sellPrice = sellPriceIdx !== -1 ? parseFloat(cols[sellPriceIdx]) : NaN;
+      const costPrice = costPriceIdx !== -1 ? parseFloat(cols[costPriceIdx]) : NaN;
       const unit = unitIdx !== -1 ? (cols[unitIdx]?.trim() || null) : null;
-      const unitGrams = unitGramsIdx !== -1 ? (parseFloat(cols[unitGramsIdx]) || null) : null;
+      const unitGramsRaw = unitGramsIdx !== -1 ? parseFloat(cols[unitGramsIdx]) : NaN;
+      const unitGrams = isNaN(unitGramsRaw) ? null : unitGramsRaw;
 
       try {
         await createHerb({
           name,
-          sellPrice,
-          costPrice,
+          sellPrice: isNaN(sellPrice) ? 0 : sellPrice,
+          costPrice: isNaN(costPrice) ? 0 : costPrice,
           unit: unit || null,
-          unitGrams: unitGrams || null,
+          unitGrams: unitGrams ?? null,
         });
         existingNames.add(name);
         created++;

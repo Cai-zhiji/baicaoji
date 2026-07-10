@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   InlineCombobox,
   type ComboboxOption,
@@ -16,6 +17,7 @@ import {
   ClipboardList,
   AlertTriangle,
   Plus,
+  Trash2,
 } from "lucide-react";
 import {
   Dialog,
@@ -25,86 +27,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
-
-/* ── Types ── */
-
-interface Herb {
-  id: number;
-  name: string;
-  pinyin: string;
-  sellPrice: number;
-  stock: number;
-}
-
-interface Patient {
-  id: number;
-  name: string;
-  gender: string;
-  age: number | null;
-}
-
-interface PrescriptionItem {
-  herbId: number;
-  herbName: string;
-  grams: number;
-  unitPrice: number;
-}
-
-interface Template {
-  id: number;
-  name: string;
-  lastUsedAt: string | null;
-  items: { herbId: number; herbName: string; grams: number }[];
-}
-
-/* ── Helpers ── */
-
-function patientToOption(p: Patient): ComboboxOption<Patient> {
-  return {
-    key: p.id,
-    label: p.name,
-    searchTokens: [toPinyin(p.name), toPinyinInitials(p.name)],
-    meta: (
-      <span className="text-[11px]">
-        {p.gender} {p.age ? `· ${p.age}岁` : ""}
-      </span>
-    ),
-    data: p,
-  };
-}
-
-function herbToOption(h: Herb): ComboboxOption<Herb> {
-  return {
-    key: h.id,
-    label: h.name,
-    searchTokens: [h.pinyin, toPinyinInitials(h.name)],
-    meta: (
-      <span className="flex items-center gap-2 text-[11px]">
-        <span>¥{h.sellPrice.toFixed(2)}/g</span>
-        <Badge variant={h.stock < 50 ? "destructive" : "secondary"} className="text-[10px]">
-          {h.stock}g
-        </Badge>
-      </span>
-    ),
-    data: h,
-  };
-}
-
-function templateToOption(t: Template): ComboboxOption<Template> {
-  const herbCount = t.items.length;
-  return {
-    key: t.id,
-    label: t.name,
-    searchTokens: [toPinyin(t.name), toPinyinInitials(t.name)],
-    meta: (
-      <span className="text-[11px] text-(--muted)">
-        {herbCount} 味药
-      </span>
-    ),
-    data: t,
-  };
-}
+import type { Herb, Patient, PrescriptionItem, Template } from "@/lib/types";
+import { herbToOption, patientToOption, templateToOption } from "@/lib/option-factory";
 
 /* ── Page ── */
 
@@ -122,6 +46,8 @@ export default function PrescriptionPage() {
   const [tplDialogOpen, setTplDialogOpen] = useState(false);
   const [tplName, setTplName] = useState("");
   const [templateSearch, setTemplateSearch] = useState("");
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [loading, setLoading] = useState(true);
   const patientInputRef = useRef<HTMLInputElement>(null);
   const herbInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,14 +57,20 @@ export default function PrescriptionPage() {
   /* ── Data loading ── */
 
   useEffect(() => {
-    fetch("/api/herbs")
-      .then((r) => r.json())
-      .then(setHerbs)
-      .catch(() => toast.error("加载药材失败"));
-    fetch("/api/patients")
-      .then((r) => r.json())
-      .then((data) => {
-        setPatients(data);
+    let cancelled = false;
+
+    Promise.all([
+      fetch("/api/herbs").then((r) => r.json()),
+      fetch("/api/patients").then((r) => r.json()),
+      fetch("/api/templates").then((r) => r.json()),
+    ])
+      .then(([herbsData, patientsData, templatesData]) => {
+        if (cancelled) return;
+        setHerbs(herbsData);
+        setPatients(patientsData);
+        setTemplates(templatesData);
+        setLoading(false);
+
         // Pre-select patient from URL query param
         if (typeof window !== "undefined") {
           const params = new URLSearchParams(window.location.search);
@@ -146,11 +78,11 @@ export default function PrescriptionPage() {
           const pname = params.get("patientName");
           const rxId = params.get("rxId");
           if (pid) {
-            const p = data.find((x: Patient) => x.id === parseInt(pid));
+            const p = patientsData.find((x: Patient) => x.id === parseInt(pid));
             if (p) {
               setSelectedPatient(p);
             } else if (pname) {
-              setSelectedPatient({ id: parseInt(pid), name: pname, gender: "男", age: null });
+              setSelectedPatient({ id: parseInt(pid), name: pname, gender: "男", age: null, phone: null });
             }
           }
           // Pre-fill from existing prescription（防止 StrictMode 双重加载）
@@ -161,11 +93,12 @@ export default function PrescriptionPage() {
               .then((rx) => {
                 if (rx.items) {
                   setItems(
-                    rx.items.map((i: { herbId: number; herb: { name: string }; grams: number; unitPrice: number }) => ({
-                      herbId: i.herbId,
-                      herbName: i.herb.name,
+                    rx.items.map((i: { herbId: number | null; herbName: string; herb?: { name: string } | null; grams: number; unitPrice: number; unitCost: number }) => ({
+                      herbId: i.herbId ?? null,
+                      herbName: i.herb?.name ?? i.herbName,
                       grams: i.grams,
                       unitPrice: i.unitPrice,
+                      unitCost: i.unitCost,
                     }))
                   );
                   toast.info(`已加载历史药方（${rx.items.length} 味药），可修改后保存`);
@@ -175,16 +108,19 @@ export default function PrescriptionPage() {
           }
         }
       })
-      .catch(() => {});
-    fetch("/api/templates")
-      .then((r) => r.json())
-      .then(setTemplates)
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) {
+          toast.error("加载数据失败");
+          setLoading(false);
+        }
+      });
+
+    return () => { cancelled = true; };
   }, []);
 
   /* ── Patient ── */
 
-  const patientOptions: ComboboxOption<Patient>[] = patients.map(patientToOption);
+  const patientOptions: ComboboxOption<Patient>[] = patients.map(p => patientToOption(p, <span className="text-[11px]">{p.gender} {p.age ? `· ${p.age}岁` : ""}</span>));
 
   function handleSelectPatient(opt: ComboboxOption<Patient>) {
     setSelectedPatient(opt.data!);
@@ -222,7 +158,14 @@ export default function PrescriptionPage() {
 
   /* ── Herb ── */
 
-  const herbOptions: ComboboxOption<Herb>[] = herbs.map(herbToOption);
+  const herbOptions: ComboboxOption<Herb>[] = herbs.map(h => herbToOption(h, (
+    <span className="flex items-center gap-2 text-[11px]">
+      <span>¥{h.sellPrice.toFixed(2)}/g</span>
+      <Badge variant={h.stock < 50 ? "destructive" : "secondary"} className="text-[10px]">
+        {h.stock}g
+      </Badge>
+    </span>
+  )));
 
   function addHerb(opt: ComboboxOption<Herb>) {
     const herb = opt.data!;
@@ -232,7 +175,7 @@ export default function PrescriptionPage() {
     }
     setItems([
       ...items,
-      { herbId: herb.id, herbName: herb.name, grams: 0, unitPrice: herb.sellPrice },
+      { herbId: herb.id, herbName: herb.name, grams: 0, unitPrice: herb.sellPrice, unitCost: herb.costPrice },
     ]);
     setHerbSearch("");
     setTimeout(() => itemsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -240,7 +183,7 @@ export default function PrescriptionPage() {
 
   function updateGrams(index: number, grams: number) {
     const updated = [...items];
-    updated[index].grams = grams;
+    updated[index].grams = isNaN(grams) ? 0 : grams;
     setItems(updated);
   }
 
@@ -273,7 +216,6 @@ export default function PrescriptionPage() {
       toast.error("请为每味药材填写克数");
       return;
     }
-
     setSaving(true);
     try {
       const res = await fetch("/api/prescriptions", {
@@ -282,7 +224,8 @@ export default function PrescriptionPage() {
         body: JSON.stringify({
           patientId: selectedPatient?.id ?? null,
           items: items.map((i) => ({
-            herbId: i.herbId,
+            herbId: i.herbId || null,
+            herbName: i.herbName,
             grams: i.grams,
             unitPrice: i.unitPrice,
           })),
@@ -309,26 +252,40 @@ export default function PrescriptionPage() {
   /* ── Template ── */
 
   function loadTemplate(template: Template) {
-    const existingIds = new Set(items.map((i) => i.herbId));
+    const existingNames = new Set(items.map((i) => i.herbName));
+    let unmatchedCount = 0;
     const newItems: PrescriptionItem[] = template.items
-      .filter((t) => !existingIds.has(t.herbId))
+      .filter((t) => {
+        if (existingNames.has(t.herbName)) return false;
+        existingNames.add(t.herbName);
+        return true;
+      })
       .map((t) => {
-        const herb = herbs.find((h) => h.id === t.herbId);
+        // 优先按 ID 匹配，ID 不存在时按名称匹配
+        const herb = t.herbId
+          ? herbs.find((h) => h.id === t.herbId)
+          : herbs.find((h) => h.name === t.herbName);
+        if (!herb) unmatchedCount++;
         return {
-          herbId: t.herbId,
+          herbId: herb?.id ?? null,
           herbName: t.herbName,
           grams: t.grams ?? 0,
           unitPrice: herb?.sellPrice ?? 0,
+          unitCost: herb?.costPrice ?? 0,
         };
       });
-    setItems([...items, ...newItems]);
+    setItems(prev => [...prev, ...newItems]);
     setTemplateSearch("");
-    toast.success(`已加载模版：${template.name}（${newItems.length} 味药）`);
+    const msg = `已加载模版：${template.name}（${newItems.length} 味药）`;
+    if (unmatchedCount > 0) {
+      toast.success(msg, { description: `${unmatchedCount} 味药材未录入系统，单价为 0，请手动调整` });
+    } else {
+      toast.success(msg);
+    }
     setTimeout(() => itemsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
 
     // 标记模版被使用
     fetch(`/api/templates/${template.id}`, { method: "PATCH" }).catch(() => {});
-    // 乐观更新本地状态
     setTemplates((prev) =>
       prev.map((t) => (t.id === template.id ? { ...t, lastUsedAt: new Date().toISOString() } : t))
     );
@@ -354,7 +311,7 @@ export default function PrescriptionPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: tplName.trim(),
-          items: items.map((i) => ({ herbId: i.herbId, grams: i.grams })),
+          items: items.map((i) => ({ herbId: i.herbId, herbName: i.herbName, grams: i.grams })),
         }),
       });
       if (res.ok) {
@@ -371,6 +328,14 @@ export default function PrescriptionPage() {
   }
 
   /* ── Render ── */
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-5 w-5 animate-spin text-(--muted)" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -446,7 +411,7 @@ export default function PrescriptionPage() {
               const bTime = b.lastUsedAt ? new Date(b.lastUsedAt).getTime() : 0;
               return bTime - aTime;
             })
-            .map(templateToOption)}
+            .map(t => templateToOption(t, <span className="text-[11px] text-(--muted)">{t.items.length} 味药</span>))}
           onSelect={(opt) => loadTemplate(opt.data!)}
           placeholder="搜索药方模版（拼音或汉字）…"
           value={templateSearch}
@@ -490,15 +455,26 @@ export default function PrescriptionPage() {
       <div className="panel overflow-hidden">
         <div className="flex items-center justify-between px-4 pt-3">
           <span className="text-[13px] font-[510]">药方明细</span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={saveAsTemplate}
-            disabled={items.length === 0}
-          >
-            <ClipboardList className="mr-1 h-3.5 w-3.5" />
-            存模版
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={saveAsTemplate}
+              disabled={items.length === 0}
+            >
+              <ClipboardList className="mr-1 h-3.5 w-3.5" />
+              存模版
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowClearConfirm(true)}
+              disabled={items.length === 0}
+            >
+              <Trash2 className="mr-1 h-3.5 w-3.5" />
+              清空
+            </Button>
+          </div>
         </div>
 
         {items.length === 0 ? (
@@ -520,7 +496,7 @@ export default function PrescriptionPage() {
               const warning = getStockWarning(item);
               return (
                 <div
-                  key={item.herbId}
+                  key={item.herbId || `${item.herbName}-${idx}`}
                   className="grid grid-cols-12 items-center gap-2 border-b border-(--border)/50 py-1.5"
                 >
                   <div className="col-span-4">
@@ -537,7 +513,7 @@ export default function PrescriptionPage() {
                       type="number"
                       step="0.5"
                       min="0"
-                      value={item.grams || ""}
+                      value={item.grams ?? ""}
                       onChange={(e) => updateGrams(idx, parseFloat(e.target.value) || 0)}
                       className="h-8 text-[13px]"
                       placeholder="0"
@@ -618,6 +594,20 @@ export default function PrescriptionPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Clear confirmation */}
+      <ConfirmDialog
+        open={showClearConfirm}
+        onOpenChange={(v) => { if (!v) setShowClearConfirm(false); }}
+        title="确认清空"
+        message="确定清空当前药方吗？所有已添加的药材将被清除。"
+        confirmLabel="清空"
+        variant="destructive"
+        onConfirm={() => {
+          setItems([]);
+          setShowClearConfirm(false);
+        }}
+      />
     </div>
   );
 }

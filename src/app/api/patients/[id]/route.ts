@@ -1,26 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import {
+  getPatientById,
+  updatePatient,
+  deletePatient,
+} from "@/services/patients";
+import { parseId } from "@/lib/validate";
+
+function getNumericId(params: Promise<{ id: string }>): Promise<number> {
+  return params.then(({ id }) => parseId(id));
+}
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const patient = await prisma.patient.findUnique({
-      where: { id: parseInt(id) },
-      include: {
-        prescriptions: {
-          include: {
-            items: {
-              include: { herb: { select: { name: true } } },
-            },
-            followUps: true,
-          },
-          orderBy: { createdAt: "desc" },
-        },
-      },
-    });
+    const numericId = await getNumericId(params);
+    if (isNaN(numericId)) {
+      return NextResponse.json({ error: "无效的病人ID" }, { status: 400 });
+    }
+
+    const patient = await getPatientById(numericId);
 
     if (!patient) {
       return NextResponse.json({ error: "病人不存在" }, { status: 404 });
@@ -37,18 +37,19 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const numericId = await getNumericId(params);
+    if (isNaN(numericId)) {
+      return NextResponse.json({ error: "无效的病人ID" }, { status: 400 });
+    }
+
     const data = await request.json();
     const { name, gender, age, phone } = data;
 
-    const patient = await prisma.patient.update({
-      where: { id: parseInt(id) },
-      data: {
-        ...(name && { name }),
-        ...(gender && { gender }),
-        ...(age !== undefined && { age }),
-        ...(phone !== undefined && { phone }),
-      },
+    const patient = await updatePatient(numericId, {
+      ...(name !== undefined && { name }),
+      ...(gender !== undefined && { gender }),
+      ...(age !== undefined && { age }),
+      ...(phone !== undefined && { phone }),
     });
 
     return NextResponse.json(patient);
@@ -62,8 +63,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    await prisma.patient.delete({ where: { id: parseInt(id) } });
+    const numericId = await getNumericId(params);
+    if (isNaN(numericId)) {
+      return NextResponse.json({ error: "无效的病人ID" }, { status: 400 });
+    }
+
+    await deletePatient(numericId);
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "删除失败，该病人可能有关联药方" }, { status: 500 });

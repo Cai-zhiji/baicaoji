@@ -41,13 +41,15 @@ model Patient {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 // ---- 药方 ----
 model Prescription {
   id        Int      @id @default(autoincrement())
   patientId Int?
-  patient   Patient?  @relation(fields: [patientId], references: [id])
+  patient   Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
   totalPrice Float   @default(0)
   totalCost  Float   @default(0)
 
@@ -56,6 +58,9 @@ model Prescription {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([createdAt])
 }
 
 // ---- 药方明细 ----
@@ -63,11 +68,15 @@ model PrescriptionItem {
   id             Int          @id @default(autoincrement())
   prescriptionId Int
   prescription   Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
-  herbId         Int
-  herb           Herb         @relation(fields: [herbId], references: [id])
+  herbId         Int?         // 可选：药材在系统中存在时关联，不存在时仅靠 herbName 保留方剂完整性
+  herb           Herb?        @relation(fields: [herbId], references: [id], onDelete: SetNull)
+  herbName       String       // 药材名称（始终存储，不依赖 herb 关联）
   grams          Float        // 克数
   unitPrice      Float        // 开方时药材售价快照
   unitCost       Float        @default(0) // 开方时药材成本快照
+
+  @@index([prescriptionId])
+  @@index([herbId])
 }
 
 // ---- 药方模版 ----
@@ -86,9 +95,13 @@ model TemplateItem {
   id         Int      @id @default(autoincrement())
   templateId Int
   template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  herbId     Int
-  herb       Herb     @relation(fields: [herbId], references: [id])
+  herbId     Int?     // 可选：药材在系统中存在时关联，不存在时仅靠 herbName 保留方剂完整性
+  herb       Herb?    @relation(fields: [herbId], references: [id], onDelete: SetNull)
+  herbName   String?  // 药材名称（始终存储，不依赖 herb 关联）
   grams      Float    @default(0) // 默认克数
+
+  @@index([templateId])
+  @@index([herbId])
 }
 
 // ---- 随访记录 ----
@@ -99,15 +112,21 @@ model FollowUp {
   evaluation     String       // 痊愈 / 显效 / 有效 / 无效 / 加重
   note           String?
   createdAt      DateTime     @default(now())
+
+  @@index([prescriptionId])
+  @@index([createdAt])
 }
 
 // ---- 库存记录 ----
 model StockRecord {
   id        Int      @id @default(autoincrement())
   herbId    Int
-  herb      Herb     @relation(fields: [herbId], references: [id])
+  herb      Herb     @relation(fields: [herbId], references: [id], onDelete: Cascade)
   type      String   // "in" (进货) | "out" (扣减)
   grams     Float    // 克数
-  unitPrice Float?   // 进货单价（仅进货时）
+  unitPrice Float?   // 单价（进货时为进货单价，扣减时为开方售价快照）
   createdAt DateTime @default(now())
+
+  @@index([herbId])
+  @@index([createdAt])
 }

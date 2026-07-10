@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -23,10 +23,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
-import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
+import { useMutation } from "@/lib/use-mutation";
 import { formatDate, getEvaluationColor } from "@/lib/utils";
 import {
   ChevronRight,
@@ -35,36 +35,8 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-
-interface PrescriptionItem {
-  id: number;
-  grams: number;
-  unitPrice: number;
-  herb: { name: string };
-}
-
-interface Prescription {
-  id: number;
-  patientId: number | null;
-  totalPrice: number;
-  totalCost: number;
-  createdAt: string;
-  patient: { name: string } | null;
-  items: PrescriptionItem[];
-}
-
-interface FollowUp {
-  id: number;
-  prescriptionId: number;
-  evaluation: string;
-  note: string | null;
-  createdAt: string;
-}
-
-interface Patient {
-  id: number;
-  name: string;
-}
+import type { Patient, FollowUp, Prescription, PrescriptionItem } from "@/lib/types";
+import { patientToOption } from "@/lib/option-factory";
 
 const EVALUATIONS = [
   { value: "痊愈", label: "痊愈" },
@@ -90,7 +62,17 @@ export default function PrescriptionsPage() {
   const [savingFollowUp, setSavingFollowUp] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Prescription | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const { execute: clearAllPrescriptions, loading: clearing } = useMutation<{ message?: string }>({
+    url: "/api/prescriptions",
+    method: "DELETE",
+    onSuccess: (result) => {
+      toast.success(result?.message || "已清空");
+      setPrescriptions([]);
+    },
+    errorMessage: "清空失败",
+  });
 
   const loadData = () => {
     fetch("/api/prescriptions?take=200")
@@ -106,10 +88,18 @@ export default function PrescriptionsPage() {
     loadData();
   }, []);
 
+  const selectedRxRef = useRef<number | null>(null);
+
   const loadFollowUps = (prescriptionId: number) => {
+    selectedRxRef.current = prescriptionId;
     fetch(`/api/follow-ups?prescriptionId=${prescriptionId}`)
       .then((r) => r.json())
-      .then(setFollowUps)
+      .then((data) => {
+        // 确保响应仍对应当前选中的药方
+        if (selectedRxRef.current === prescriptionId) {
+          setFollowUps(data);
+        }
+      })
       .catch(() => {});
   };
 
@@ -128,16 +118,11 @@ export default function PrescriptionsPage() {
     const matchSearch =
       !search ||
       (p.patient?.name || "散客").includes(search) ||
-      p.items.some((i) => i.herb.name.includes(search));
+      p.items.some((i) => (i.herb?.name ?? i.herbName).includes(search));
     return matchPatient && matchSearch;
   });
 
-  const patientOptions: ComboboxOption<Patient>[] = patients.map((p) => ({
-    key: p.id,
-    label: p.name,
-    searchTokens: [toPinyin(p.name), toPinyinInitials(p.name)],
-    data: p,
-  }));
+  const patientOptions: ComboboxOption<Patient>[] = patients.map(p => patientToOption(p));
 
   const saveFollowUp = async () => {
     if (!selected || !newEvaluation) {
@@ -184,7 +169,8 @@ export default function PrescriptionsPage() {
         setDeleteTarget(null);
         loadData();
       } else {
-        toast.error("删除失败");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "删除失败");
       }
     } catch {
       toast.error("删除失败");
@@ -203,7 +189,7 @@ export default function PrescriptionsPage() {
   /** 复制药方到剪贴板 */
   async function copyPrescription(p: Prescription) {
     const text = p.items
-      .map((item) => `${item.herb.name} ${item.grams}g`)
+      .map((item) => `${item.herb?.name ?? item.herbName} ${item.grams}g`)
       .join("、");
 
     try {
@@ -215,22 +201,9 @@ export default function PrescriptionsPage() {
   }
 
   async function clearAll() {
-    setClearing(true);
-    try {
-      const res = await fetch("/api/prescriptions", { method: "DELETE" });
-      const result = await res.json();
-      if (res.ok) {
-        toast.success(result.message);
-        setPrescriptions([]);
-      } else {
-        toast.error(result.error || "清空失败");
-      }
-    } catch {
-      toast.error("清空失败");
-    } finally {
-      setClearing(false);
-    }
-  };
+    await clearAllPrescriptions();
+    setShowClearConfirm(false);
+  }
 
   return (
     <div className="space-y-3">
@@ -241,7 +214,7 @@ export default function PrescriptionsPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setClearing(true)}
+            onClick={() => setShowClearConfirm(true)}
             disabled={clearing}
             className="text-[11px] text-(--muted)"
           >
@@ -317,7 +290,7 @@ export default function PrescriptionsPage() {
                 <div className="mt-0.5 flex gap-1.5">
                   {p.items.slice(0, 4).map((item) => (
                     <span key={item.id} className="text-[11px] text-(--muted)">
-                      {item.herb.name}
+                      {item.herb?.name ?? item.herbName}
                     </span>
                   ))}
                   {p.items.length > 4 && (
@@ -395,7 +368,7 @@ export default function PrescriptionsPage() {
                     key={item.id}
                     className="flex items-center justify-between rounded-[8px] bg-(--accent-soft) px-3 py-2 text-[13px]"
                   >
-                    <span className="font-medium">{item.herb.name}</span>
+                    <span className="font-medium">{item.herb?.name ?? item.herbName}</span>
                     <div className="flex items-center gap-3 text-(--muted)">
                       <span>{item.grams}g</span>
                       <span>¥{item.unitPrice.toFixed(2)}/g</span>
@@ -487,48 +460,28 @@ export default function PrescriptionsPage() {
       </Dialog>
 
       {/* Clear all confirmation */}
-      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认清空</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除全部 {prescriptions.length} 条药方吗？药材库存将自动退回，此操作不可恢复。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearing(false)}>
-              取消
-            </Button>
-            <Button variant="destructive" onClick={clearAll}>
-              清空全部
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showClearConfirm && !deleteTarget}
+        onOpenChange={(v) => { if (!v) setShowClearConfirm(false); }}
+        title="确认清空"
+        message={`确定删除全部 ${prescriptions.length} 条药方吗？药材库存将自动退回，此操作不可恢复。`}
+        confirmLabel="清空全部"
+        variant="destructive"
+        onConfirm={clearAll}
+        loading={clearing}
+      />
 
       {/* Delete confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除「{deleteTarget?.patient?.name || "散客"}」的药方吗？药材库存会自动退回。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={deletePrescription}
-              disabled={deleting}
-            >
-              {deleting ? "删除中…" : "删除"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title="确认删除"
+        message={`确定删除「${deleteTarget?.patient?.name || "散客"}」的药方吗？药材库存会自动退回。`}
+        confirmLabel="删除"
+        variant="destructive"
+        onConfirm={deletePrescription}
+        loading={deleting}
+      />
     </div>
   );
 }

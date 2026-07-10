@@ -5,10 +5,8 @@ import { listHerbs, createHerb } from "@/services/herbs";
 
 export async function DELETE() {
   try {
-    // 按依赖顺序删除：处方明细 → 模版明细 → 药材 → 库存记录
+    // 按依赖顺序删除：库存记录 → 药材（PrescriptionItem/TemplateItem 有 onDelete: SetNull，保留名称）
     const count = await prisma.$transaction(async (tx) => {
-      await tx.prescriptionItem.deleteMany();
-      await tx.templateItem.deleteMany();
       await tx.stockRecord.deleteMany();
       const r = await tx.herb.deleteMany();
       return r.count;
@@ -16,7 +14,7 @@ export async function DELETE() {
     return NextResponse.json({
       success: true,
       deleted: count,
-      message: `已清空全部 ${count} 种药材（同时清空了相关药方明细和模版明细）`,
+      message: `已清空全部 ${count} 种药材（药方和模版中的药材名称已保留）`,
     });
   } catch (err) {
     return handleApiError(err, "清空药材失败");
@@ -41,6 +39,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "药材名称不能为空" }, { status: 400 });
     }
 
+    const sell = sellPrice ?? 0;
+    const cost = costPrice ?? 0;
+    if (sell < 0 || cost < 0) {
+      return NextResponse.json({ error: "价格不能为负数" }, { status: 400 });
+    }
+
     const existing = await prisma.herb.findUnique({ where: { name } });
     if (existing) {
       return NextResponse.json({ error: "药材已存在" }, { status: 409 });
@@ -48,8 +52,8 @@ export async function POST(request: NextRequest) {
 
     const herb = await createHerb({
       name,
-      sellPrice: sellPrice ?? 0,
-      costPrice: costPrice ?? 0,
+      sellPrice: sell,
+      costPrice: cost,
       stock: stock != null ? parseFloat(stock) : undefined,
       unit: unit ?? null,
       unitGrams: unitGrams != null ? parseFloat(unitGrams) : null,

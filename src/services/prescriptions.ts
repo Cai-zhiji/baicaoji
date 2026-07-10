@@ -6,7 +6,16 @@ import { deductStock, restoreStock } from "@/services/stock";
 const prescriptionInclude = {
   patient: { select: { name: true } as const },
   items: {
-    include: { herb: { select: { name: true } as const } },
+    select: {
+      id: true,
+      prescriptionId: true,
+      herbId: true,
+      herbName: true,
+      grams: true,
+      unitPrice: true,
+      unitCost: true,
+      herb: { select: { name: true } },
+    },
   },
 };
 
@@ -42,7 +51,8 @@ export async function getPrescriptionById(id: number) {
     createdAt: prescription.createdAt,
     items: prescription.items.map((i) => ({
       herbId: i.herbId,
-      herb: { id: i.herb.id, name: i.herb.name },
+      herbName: i.herbName,
+      herb: i.herb ? { id: i.herb.id, name: i.herb.name } : { id: null, name: i.herbName },
       grams: i.grams,
       unitPrice: i.unitPrice,
       unitCost: i.unitCost,
@@ -53,41 +63,47 @@ export async function getPrescriptionById(id: number) {
 /* ── 创建 ── */
 
 interface CreateItemInput {
-  herbId: number;
+  herbId: number | null;
+  herbName: string;
   grams: number;
   unitPrice: number;
 }
 
 export async function createPrescription(
-  patientId: number,
+  patientId: number | null,
   items: CreateItemInput[],
 ) {
   return prisma.$transaction(async (tx) => {
-    // 加载成本价
-    const herbIds = items.map((i) => i.herbId);
-    const herbs = await tx.herb.findMany({
-      where: { id: { in: herbIds } },
-      select: { id: true, costPrice: true },
-    });
+    // 分离已知/未知药材
+    const knownIds = items
+      .map((i) => i.herbId)
+      .filter((id): id is number => id !== null && id > 0);
+
+    // 加载已知药材的成本价
+    const herbs = knownIds.length > 0
+      ? await tx.herb.findMany({
+          where: { id: { in: knownIds } },
+          select: { id: true, costPrice: true },
+        })
+      : [];
     const costMap = new Map(herbs.map((h) => [h.id, h.costPrice]));
 
-    // 计算总成本并准备快照数据
+    // 计算总价/总成本，准备快照数据
+    let totalPrice = 0;
     let totalCost = 0;
-    const itemsWithCost = items.map((item) => {
-      const unitCost = costMap.get(item.herbId) ?? 0;
+    const itemsData = items.map((item) => {
+      const unitCost = item.herbId ? (costMap.get(item.herbId) ?? 0) : 0;
+      const itemTotal = item.unitPrice * item.grams;
+      totalPrice += itemTotal;
       totalCost += unitCost * item.grams;
       return {
         herbId: item.herbId,
+        herbName: item.herbName,
         grams: item.grams,
         unitPrice: item.unitPrice,
         unitCost,
       };
     });
-
-    const totalPrice = items.reduce(
-      (sum, item) => sum + item.unitPrice * item.grams,
-      0,
-    );
 
     // 创建药方
     const created = await tx.prescription.create({
@@ -95,7 +111,7 @@ export async function createPrescription(
         patientId,
         totalPrice: Math.round(totalPrice * 100) / 100,
         totalCost: Math.round(totalCost * 100) / 100,
-        items: { create: itemsWithCost },
+        items: { create: itemsData },
       },
       include: {
         items: true,
@@ -103,9 +119,11 @@ export async function createPrescription(
       },
     });
 
-    // 扣减库存
+    // 仅对已知药材扣减库存
     for (const item of items) {
-      await deductStock(item.herbId, item.grams, item.unitPrice, tx);
+      if (item.herbId) {
+        await deductStock(item.herbId, item.grams, item.unitPrice, tx);
+      }
     }
 
     return created;
@@ -115,35 +133,39 @@ export async function createPrescription(
 /* ── 删除 ── */
 
 export async function deletePrescription(id: number) {
-  const prescription = await prisma.prescription.findUnique({
-    where: { id },
-    include: { items: true },
+  return prisma.$transaction(async (tx) => {
+    const prescription = await tx.prescription.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+
+    if (!prescription) {
+      throw new Error("NOT_FOUND");
+    }
+
+    // 退回库存（仅已知药材）
+    for (const item of prescription.items) {
+      if (item.herbId) {
+        await restoreStock(item.herbId, item.grams, item.unitPrice, tx);
+      }
+    }
+
+    // 删除药方（级联删除 items 和 followUps）
+    await tx.prescription.delete({ where: { id } });
   });
-
-  if (!prescription) {
-    throw new Error("NOT_FOUND");
-  }
-
-  // 退回库存
-  for (const item of prescription.items) {
-    await restoreStock(item.herbId, item.grams, item.unitPrice);
-  }
-
-  // 删除药方（级联删除 items 和 followUps）
-  await prisma.prescription.delete({ where: { id } });
 }
 
 export async function deleteAllPrescriptions() {
   const count = await prisma.$transaction(async (tx) => {
-    // 退回所有库存
+    // 退回所有库存（仅已知药材）
     const items = await tx.prescriptionItem.findMany();
     for (const item of items) {
-      await restoreStock(item.herbId, item.grams, item.unitPrice, tx);
+      if (item.herbId) {
+        await restoreStock(item.herbId, item.grams, item.unitPrice, tx);
+      }
     }
 
-    // 级联删除
-    await tx.followUp.deleteMany();
-    await tx.prescriptionItem.deleteMany();
+    // 级联删除（PrescriptionItem 和 FollowUp 有 onDelete: Cascade）
     const r = await tx.prescription.deleteMany();
     return r.count;
   });

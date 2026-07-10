@@ -20,40 +20,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { formatDate } from "@/lib/utils";
 import { useApi } from "@/lib/use-api";
-import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
-import { Plus, ArrowDown, ArrowUp, Info } from "lucide-react";
-
-interface Herb {
-  id: number;
-  name: string;
-  pinyin: string;
-  stock: number;
-  costPrice: number;
-}
-
-interface StockRecord {
-  id: number;
-  herbId: number;
-  herb: { name: string };
-  type: string;
-  grams: number;
-  unitPrice: number | null;
-  createdAt: string;
-}
-
-function herbToOption(h: Herb): ComboboxOption<Herb> {
-  return {
-    key: h.id,
-    label: h.name,
-    searchTokens: [h.pinyin, toPinyinInitials(h.name)],
-    meta: <span className="text-[11px] text-(--muted)">库存 {h.stock}g</span>,
-    data: h,
-  };
-}
+import { Plus, ArrowDown, ArrowUp, Info, Loader2 } from "lucide-react";
+import type { Herb, StockRecord } from "@/lib/types";
+import { herbToOption } from "@/lib/option-factory";
 
 export default function InventoryPage() {
-  const { data: herbsData, refetch: refetchHerbs } = useApi<Herb[]>("/api/herbs");
-  const { data: recordsData, refetch: refetchRecords } = useApi<StockRecord[]>("/api/inventory");
+  const { data: herbsData, loading: herbsLoading, error: herbsError, refetch: refetchHerbs } = useApi<Herb[]>("/api/herbs");
+  const { data: recordsData, loading: recordsLoading, refetch: refetchRecords } = useApi<StockRecord[]>("/api/inventory");
   const herbs = herbsData ?? [];
   const records = recordsData ?? [];
   const [open, setOpen] = useState(false);
@@ -63,7 +36,7 @@ export default function InventoryPage() {
   const [unitPrice, setUnitPrice] = useState("");
   const [herbSearch, setHerbSearch] = useState("");
 
-  const herbOptions: ComboboxOption<Herb>[] = herbs.map(herbToOption);
+  const herbOptions: ComboboxOption<Herb>[] = herbs.map(h => herbToOption(h, <span className="text-[11px] text-(--muted)">库存 {h.stock}g</span>));
 
   async function stockIn() {
     if (!selectedHerbId || !grams) {
@@ -91,7 +64,8 @@ export default function InventoryPage() {
         refetchHerbs();
         refetchRecords();
       } else {
-        toast.error("进货失败");
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "进货失败");
       }
     } catch {
       toast.error("进货失败");
@@ -194,6 +168,15 @@ export default function InventoryPage() {
         </Dialog>
       </div>
 
+      {(herbsLoading || recordsLoading) && (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-(--muted)" />
+        </div>
+      )}
+      {herbsError && (
+        <p className="py-4 text-center text-[13px] text-(--danger)">加载失败：{herbsError}</p>
+      )}
+
       <Tabs defaultValue="stock">
         <TabsList>
           <TabsTrigger value="stock">库存概览</TabsTrigger>
@@ -240,7 +223,7 @@ export default function InventoryPage() {
                 >
                   <div>
                     <span className="text-[13px] font-medium">
-                      {r.herb.name}
+                      {r.herb?.name}
                     </span>
                     <span className="ml-2 text-[11px] text-(--muted)">
                       {formatDate(r.createdAt)}

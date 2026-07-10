@@ -15,6 +15,9 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
+  /** 确认按钮样式，默认 "destructive" */
+  variant?: "destructive" | "default";
   onConfirm: () => void;
   loading?: boolean;
 }
@@ -25,6 +28,8 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel = "确认",
+  cancelLabel = "取消",
+  variant = "destructive",
   onConfirm,
   loading,
 }: ConfirmDialogProps) {
@@ -42,10 +47,10 @@ export function ConfirmDialog({
         </p>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {cancelLabel}
           </Button>
           <Button
-            variant="destructive"
+            variant={variant}
             onClick={onConfirm}
             disabled={loading}
           >

@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     const data = await request.json();
     const { prescriptionId, evaluation, note } = data;
 
-    if (!prescriptionId || !evaluation) {
+    if (prescriptionId == null || !evaluation) {
       return NextResponse.json(
         { error: "缺少药方或评价" },
         { status: 400 }

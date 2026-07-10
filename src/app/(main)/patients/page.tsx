@@ -18,19 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
+import { useMutation } from "@/lib/use-mutation";
 import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
-import { Plus, Pencil, Trash2, Upload } from "lucide-react";
-
-interface Patient {
-  id: number;
-  name: string;
-  gender: string;
-  age: number | null;
-  phone: string | null;
-}
+import { Plus, Pencil, Trash2, Upload, Loader2 } from "lucide-react";
+import type { Patient } from "@/lib/types";
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -42,24 +36,43 @@ export default function PatientsPage() {
   const [age, setAge] = useState("");
   const [phone, setPhone] = useState("");
   const [importing, setImporting] = useState(false);
-  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const { execute: clearAllPatients, loading: clearing } = useMutation<{ message?: string }>({
+    url: "/api/patients",
+    method: "DELETE",
+    onSuccess: (result) => {
+      toast.success(result?.message || "已清空");
+      setPatients([]);
+    },
+    errorMessage: "清空失败",
+  });
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Patient | null>(null);
 
+  const [initialLoading, setInitialLoading] = useState(true);
+
   useEffect(() => {
-    fetch("/api/patients").then((r) => r.json()).then(setPatients);
+    fetch("/api/patients")
+      .then((r) => r.json())
+      .then((data) => { setPatients(data); setInitialLoading(false); })
+      .catch(() => { toast.error("加载病人列表失败"); setInitialLoading(false); });
   }, []);
 
   const filtered = patients.filter((p) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      p.name.includes(q) ||
-      p.phone?.includes(q) ||
-      toPinyin(p.name).includes(q) ||
-      toPinyinInitials(p.name).includes(q)
-    );
+    try {
+      return (
+        p.name.includes(q) ||
+        p.phone?.includes(q) ||
+        toPinyin(p.name).includes(q) ||
+        toPinyinInitials(p.name).includes(q)
+      );
+    } catch {
+      return p.name.includes(q) || (p.phone?.includes(q) ?? false);
+    }
   });
 
   function reset() {
@@ -108,7 +121,9 @@ export default function PatientsPage() {
       const res = await fetch(`/api/patients/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("病人已删除");
-        setPatients(patients.filter((p) => p.id !== id));
+        setPatients((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        toast.error("删除失败");
       }
     } catch {
       toast.error("删除失败");
@@ -118,21 +133,8 @@ export default function PatientsPage() {
   }
 
   async function clearAll() {
-    setClearing(true);
-    try {
-      const res = await fetch("/api/patients", { method: "DELETE" });
-      const result = await res.json();
-      if (res.ok) {
-        toast.success(result.message);
-        setPatients([]);
-      } else {
-        toast.error(result.error || "清空失败");
-      }
-    } catch {
-      toast.error("清空失败");
-    } finally {
-      setClearing(false);
-    }
+    await clearAllPatients();
+    setShowClearConfirm(false);
   }
 
   async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -160,6 +162,14 @@ export default function PatientsPage() {
       setImporting(false);
       e.target.value = "";
     }
+  }
+
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-5 w-5 animate-spin text-(--muted)" />
+      </div>
+    );
   }
 
   return (
@@ -201,7 +211,7 @@ export default function PatientsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>性别</Label>
-                  <Select value={gender} onValueChange={(v) => setGender(v ?? "男")}>
+                  <Select value={gender} onValueChange={(v) => setGender(v || "男")}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="男">男</SelectItem>
@@ -228,7 +238,7 @@ export default function PatientsPage() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => setClearing(true)}
+            onClick={() => setShowClearConfirm(true)}
             disabled={clearing}
             className="text-[11px] text-(--muted)"
           >
@@ -297,47 +307,27 @@ export default function PatientsPage() {
       </div>
 
       {/* Clear all confirmation */}
-      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认清空</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除全部 {patients.length} 位病人吗？此操作不可恢复。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearing(false)}>
-              取消
-            </Button>
-            <Button variant="destructive" onClick={clearAll}>
-              清空全部
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showClearConfirm && !deleteTarget}
+        onOpenChange={(v) => { if (!v) setShowClearConfirm(false); }}
+        title="确认清空"
+        message={`确定删除全部 ${patients.length} 位病人吗？此操作不可恢复。`}
+        confirmLabel="清空全部"
+        variant="destructive"
+        onConfirm={clearAll}
+        loading={clearing}
+      />
 
       {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除病人「{deleteTarget?.name}」吗？相关药方不会被删除。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && remove(deleteTarget.id)}
-            >
-              删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title="确认删除"
+        message={`确定删除病人「${deleteTarget?.name}」吗？相关药方不会被删除。`}
+        confirmLabel="删除"
+        variant="destructive"
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }

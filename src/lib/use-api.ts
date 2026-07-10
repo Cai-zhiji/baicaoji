@@ -28,8 +28,9 @@ export function useApi<T = unknown>(url: string): UseApiReturn<T> {
   const mountedRef = useRef(true);
 
   const fetchData = useCallback(() => {
+    const controller = new AbortController();
     setState((prev) => ({ ...prev, loading: true, error: null }));
-    fetch(url)
+    fetch(url, { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
@@ -40,17 +41,23 @@ export function useApi<T = unknown>(url: string): UseApiReturn<T> {
         }
       })
       .catch((err) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         if (mountedRef.current) {
           setState({ data: null, loading: false, error: err.message });
         }
       });
+
+    return () => {
+      controller.abort();
+      mountedRef.current = false;
+    };
   }, [url]);
 
   useEffect(() => {
     mountedRef.current = true;
-    fetchData();
+    const cleanup = fetchData();
     return () => {
-      mountedRef.current = false;
+      cleanup?.();
     };
   }, [fetchData]);
 

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStats } from "@/services/stats";
 
+const VALID_PERIODS = ["all", "monthly", "quarterly"] as const;
+type Period = (typeof VALID_PERIODS)[number];
+
 export async function GET(request: NextRequest) {
   try {
-    const period =
-      (request.nextUrl.searchParams.get("period") as
-        | "all"
-        | "monthly"
-        | "quarterly") || "all";
+    const rawPeriod = request.nextUrl.searchParams.get("period") || "all";
+    const period: Period = VALID_PERIODS.includes(rawPeriod as Period)
+      ? (rawPeriod as Period)
+      : "all";
 
     const stats = await getStats(period);
     return NextResponse.json(stats);

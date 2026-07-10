@@ -8,44 +8,15 @@ import { toast } from "sonner";
 import { formatDate, getEvaluationColor } from "@/lib/utils";
 import { ArrowLeft, PenLine, Copy, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { Patient, FollowUp, Prescription, PrescriptionItem } from "@/lib/types";
 
-interface FollowUp {
-  id: number;
-  evaluation: string;
-  note: string | null;
-  createdAt: string;
-}
-
-interface PrescriptionItem {
-  id: number;
-  grams: number;
-  unitPrice: number;
-  herb: { name: string };
-}
-
-interface Prescription {
-  id: number;
-  totalPrice: number;
-  totalCost: number;
-  createdAt: string;
-  items: PrescriptionItem[];
-  followUps: FollowUp[];
-}
-
-interface Patient {
-  id: number;
-  name: string;
-  gender: string;
-  age: number | null;
-  phone: string | null;
-  createdAt: string;
-  prescriptions: Prescription[];
-}
+/** Page-specific: Patient enriched with prescription history */
+type PatientDetail = Patient & { prescriptions: Prescription[] };
 
 export default function PatientDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const [patient, setPatient] = useState<Patient | null>(null);
+  const [patient, setPatient] = useState<PatientDetail | null>(null);
 
   useEffect(() => {
     fetch(`/api/patients/${params.id}`)
@@ -78,7 +49,7 @@ export default function PatientDetailPage() {
   /** 复制药方内容到剪贴板 */
   function copyPrescription(p: Prescription) {
     const text = p.items
-      .map((i) => `${i.herb.name} ${i.grams}g`)
+      .map((i) => `${i.herb?.name ?? i.herbName} ${i.grams}g`)
       .join("、");
     navigator.clipboard.writeText(text).then(
       () => toast.success("药方已复制"),
@@ -185,13 +156,13 @@ export default function PatientDetailPage() {
               <div className="flex flex-wrap gap-1.5 border-t border-(--border) px-4 pt-2 pb-3">
                 {p.items.map((item) => (
                   <Badge key={item.id} variant="secondary" className="text-[11px]">
-                    {item.herb.name} {item.grams}g
+                    {item.herb?.name ?? item.herbName} {item.grams}g
                   </Badge>
                 ))}
               </div>
 
               {/* Follow-ups */}
-              {p.followUps.length > 0 && (
+              {p.followUps && p.followUps.length > 0 && (
                 <div className="space-y-1.5 border-t border-(--border) px-4 pt-2 pb-3">
                   {p.followUps.map((f) => (
                     <div

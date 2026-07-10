@@ -10,67 +10,29 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   InlineCombobox,
   type ComboboxOption,
 } from "@/components/ui/inline-combobox";
 import { toast } from "sonner";
+import { useMutation } from "@/lib/use-mutation";
 import { toPinyin, toPinyinInitials } from "@/lib/pinyin";
+import type { Herb, Template } from "@/lib/types";
+import { herbToOption } from "@/lib/option-factory";
 import { AzIndex, groupByFirstLetter } from "@/components/ui/az-index";
 import { Trash2, BookOpen, Upload, Search, Plus, Pencil, X } from "lucide-react";
 
 /* ── Types ── */
 
-interface Herb {
-  id: number;
-  name: string;
-  pinyin: string;
-  sellPrice: number;
-  stock: number;
-  unit: string | null;
-  unitGrams: number | null;
-}
-
-interface Template {
-  id: number;
-  name: string;
-  lastUsedAt: string | null;
-  items: { herbId: number; herbName: string; grams: number }[];
-}
-
 interface DraftItem {
-  herbId: number;
+  herbId: number | null;
   herbName: string;
   grams: number;
   useAltUnit: boolean; // 是否使用替代单位（枚/个等）显示
   altUnit: string | null;
   unitGrams: number | null;
-}
-
-/* ── Helpers ── */
-
-function herbToOption(h: Herb): ComboboxOption<Herb> {
-  return {
-    key: h.id,
-    label: h.name,
-    searchTokens: [h.pinyin, toPinyinInitials(h.name)],
-    meta: (
-      <span className="flex items-center gap-2 text-[11px]">
-        <span>¥{h.sellPrice.toFixed(2)}/g</span>
-        {h.unit && h.unitGrams && (
-          <Badge variant="outline" className="text-[10px] font-normal">
-            1{h.unit}≈{h.unitGrams}g
-          </Badge>
-        )}
-        <Badge variant={h.stock < 50 ? "destructive" : "secondary"} className="text-[10px]">
-          {h.stock}g
-        </Badge>
-      </span>
-    ),
-    data: h,
-  };
 }
 
 /* ── Page ── */
@@ -90,21 +52,33 @@ export default function TemplatesPage() {
 
   // Delete confirmation
   const [deleteTarget, setDeleteTarget] = useState<Template | null>(null);
-  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  const { execute: clearAllTemplates, loading: clearing } = useMutation<{ message?: string }>({
+    url: "/api/templates",
+    method: "DELETE",
+    onSuccess: (result) => {
+      toast.success(result?.message || "已清空");
+      setTemplates([]);
+    },
+    errorMessage: "清空失败",
+  });
 
   /* ── Data ── */
 
   const loadTemplates = () => {
     fetch("/api/templates")
       .then((r) => r.json())
-      .then(setTemplates);
+      .then(setTemplates)
+      .catch(() => toast.error("加载模版失败"));
   };
 
   useEffect(() => {
     loadTemplates();
     fetch("/api/herbs")
       .then((r) => r.json())
-      .then(setHerbs);
+      .then(setHerbs)
+      .catch(() => toast.error("加载药材失败"));
   }, []);
 
   /* ── CSV ── */
@@ -150,16 +124,16 @@ export default function TemplatesPage() {
     setTplName(t.name);
     setDraftItems(
       t.items.map((i) => {
-        const herb = herbs.find((h) => h.id === i.herbId);
+        const herb = i.herbId ? herbs.find((h) => h.id === i.herbId) : undefined;
         return {
-          herbId: i.herbId,
+          herbId: i.herbId ?? null,
           herbName: i.herbName,
           grams: i.grams,
           useAltUnit: false,
           altUnit: herb?.unit ?? null,
           unitGrams: herb?.unitGrams ?? null,
         };
-      })
+      }),
     );
     setHerbSearch("");
     setOpen(true);
@@ -252,7 +226,7 @@ export default function TemplatesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: tplName.trim(),
-          items: draftItems.map((d) => ({ herbId: d.herbId, grams: d.grams })),
+          items: draftItems.map((d) => ({ herbId: d.herbId || null, herbName: d.herbName, grams: d.grams })),
         }),
       });
 
@@ -277,37 +251,37 @@ export default function TemplatesPage() {
       const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("模版已删除");
-        setTemplates(templates.filter((t) => t.id !== id));
+        setTemplates((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        toast.error("删除失败");
       }
     } catch {
       toast.error("删除失败");
     } finally {
       setDeleteTarget(null);
-      setClearing(false);
     }
   }
 
   async function clearAll() {
-    setClearing(true);
-    try {
-      const res = await fetch("/api/templates", { method: "DELETE" });
-      const result = await res.json();
-      if (res.ok) {
-        toast.success(result.message);
-        setTemplates([]);
-      } else {
-        toast.error(result.error || "清空失败");
-      }
-    } catch {
-      toast.error("清空失败");
-    } finally {
-      setClearing(false);
-    }
+    await clearAllTemplates();
+    setShowClearConfirm(false);
   }
 
   /* ── Filter ── */
 
-  const herbOptions: ComboboxOption<Herb>[] = herbs.map(herbToOption);
+  const herbOptions: ComboboxOption<Herb>[] = herbs.map(h => herbToOption(h, (
+    <span className="flex items-center gap-2 text-[11px]">
+      <span>¥{h.sellPrice.toFixed(2)}/g</span>
+      {h.unit && h.unitGrams && (
+        <Badge variant="outline" className="text-[10px] font-normal">
+          1{h.unit}≈{h.unitGrams}g
+        </Badge>
+      )}
+      <Badge variant={h.stock < 50 ? "destructive" : "secondary"} className="text-[10px]">
+        {h.stock}g
+      </Badge>
+    </span>
+  )));
 
   // 最近使用的排前面；无搜索时只展示最近 5 个
   const templatesSorted = [...templates].sort((a, b) => {
@@ -319,17 +293,22 @@ export default function TemplatesPage() {
   const filtered = templatesSorted.filter((t) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      t.name.includes(q) ||
-      toPinyin(t.name).includes(q) ||
-      toPinyinInitials(t.name).includes(q)
-    );
+    try {
+      return (
+        t.name.includes(q) ||
+        toPinyin(t.name).includes(q) ||
+        toPinyinInitials(t.name).includes(q)
+      );
+    } catch {
+      // pinyin 转换失败（如特殊字符）时仍按名称匹配
+      return t.name.includes(q);
+    }
   });
 
-  // 无搜索时只展示最近 5 个（或有使用记录的模板）
+  // 无搜索时：优先展示有使用记录的，但也不隐藏未使用的模板
   const displayed = search
     ? filtered
-    : filtered.filter((t) => t.lastUsedAt).slice(0, 5);
+    : filtered.slice(0, 20);
 
   /* ── Render ── */
 
@@ -368,7 +347,7 @@ export default function TemplatesPage() {
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setClearing(true)}
+              onClick={() => setShowClearConfirm(true)}
               disabled={clearing}
               className="text-[11px] text-(--muted)"
             >
@@ -405,9 +384,9 @@ export default function TemplatesPage() {
           </p>
         ) : (
           <>
-            {!search && templates.filter((t) => t.lastUsedAt).length > 5 && (
+            {!search && templates.filter((t) => t.lastUsedAt).length > 20 && (
               <p className="px-4 py-2 text-center text-[11px] text-(--muted)">
-                最近使用的 5 个模版
+                最近使用的 20 个模版
                 {templates.filter((t) => !t.lastUsedAt).length > 0 &&
                   `（另有 ${templates.filter((t) => !t.lastUsedAt).length} 个未使用，搜索查看全部）`}
               </p>
@@ -435,14 +414,14 @@ export default function TemplatesPage() {
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {t.items.map((item) => {
-                        const herb = herbs.find((h) => h.id === item.herbId);
+                        const herb = item.herbId ? herbs.find((h) => h.id === item.herbId) : undefined;
                         const showAlt = herb?.unit && herb?.unitGrams && herb.unitGrams > 0 && item.grams > 0;
                         const altVal = showAlt ? (item.grams / herb!.unitGrams!).toFixed(1) : null;
                         return (
                         <Badge
-                          key={item.herbId}
-                          variant="secondary"
-                          className="text-[12px]"
+                          key={`${item.herbId ?? item.herbName}-${item.grams}`}
+                          variant={item.herbExists ? "secondary" : "outline"}
+                          className={`text-[12px] ${!item.herbExists ? "border-dashed text-(--muted)" : ""}`}
                         >
                           {item.herbName}
                           {item.grams > 0 && (
@@ -529,7 +508,7 @@ export default function TemplatesPage() {
                     const displayUnit = getDisplayUnit(item);
                     return (
                     <div
-                      key={item.herbId}
+                      key={item.herbId || `${item.herbName}-${idx}`}
                       className="flex items-center gap-2 rounded-[var(--radius-sm-val)] border border-(--border) px-3 py-2"
                     >
                       <span className="min-w-0 flex-1 text-[13px] font-medium truncate">
@@ -583,47 +562,27 @@ export default function TemplatesPage() {
       </Dialog>
 
       {/* Clear all confirmation */}
-      <Dialog open={clearing && !deleteTarget} onOpenChange={(v) => { if (!v) setClearing(false); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认清空</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除全部 {templates.length} 个模版吗？此操作不可恢复。
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClearing(false)}>
-              取消
-            </Button>
-            <Button variant="destructive" onClick={clearAll}>
-              清空全部
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={showClearConfirm && !deleteTarget}
+        onOpenChange={(v) => { if (!v) setShowClearConfirm(false); }}
+        title="确认清空"
+        message={`确定删除全部 ${templates.length} 个模版吗？此操作不可恢复。`}
+        confirmLabel="清空全部"
+        variant="destructive"
+        onConfirm={clearAll}
+        loading={clearing}
+      />
 
       {/* Delete confirmation */}
-      <Dialog open={!!deleteTarget} onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}>
-        <DialogContent style={{ borderRadius: "var(--radius-xl-val)" }}>
-          <DialogHeader>
-            <DialogTitle>确认删除</DialogTitle>
-          </DialogHeader>
-          <p className="text-[14px] text-(--fg-secondary)">
-            确定删除模版「{deleteTarget?.name}」吗？
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              取消
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deleteTarget && remove(deleteTarget.id)}
-            >
-              删除
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}
+        title="确认删除"
+        message={`确定删除模版「${deleteTarget?.name}」吗？`}
+        confirmLabel="删除"
+        variant="destructive"
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }
