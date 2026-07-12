@@ -156,17 +156,86 @@ npm ci --omit=dev   # 生产环境：只装运行时依赖
 在项目根目录创建 `.env` 文件：
 
 ```bash
+nano /home/baicaoji/baicaoji/.env
+```
+
+填入以下内容：
+
+```bash
 # /home/baicaoji/baicaoji/.env
 
 # SQLite 数据库路径（绝对路径，确保 PM2 能找到）
 DATABASE_URL=file:/home/baicaoji/baicaoji/prisma/dev.db
 
-# 不需要登录认证，以下两项预留即可
-SESSION_SECRET=baicaoji-prod-$(openssl rand -hex 32)
-SITE_PASSWORD=
+# 会话加密密钥（至少 32 位随机字符串）
+SESSION_SECRET=<生成方式见下方>
+
+# 登录账号（自定义）
+ADMIN_USERNAME=<你的账号名>
+
+# 登录密码的 bcrypt 哈希（生成方式见下方，不要填明文密码）
+ADMIN_PASSWORD_HASH=<bcrypt 哈希值>
 ```
 
 > ⚠️ `DATABASE_URL` 必须使用**绝对路径**。PM2 的工作目录可能与项目目录不同，相对路径 `file:./dev.db` 会导致找不到数据库。
+
+#### 4.1.1 生成 SESSION_SECRET
+
+```bash
+openssl rand -base64 32
+```
+
+将输出的字符串（如 `kX7mP2qR...`）填入 `SESSION_SECRET=` 后面。
+
+#### 4.1.2 设置登录账号和密码
+
+百草计使用**单账号认证**，账号和密码通过环境变量配置，不在数据库中存储。密码必须以 bcrypt 哈希形式写入，不能直接填明文。
+
+**步骤 1：生成密码的 bcrypt 哈希**
+
+```bash
+node -e "const {hashSync}=require('bcryptjs');console.log(hashSync('你想用的密码',10))"
+```
+
+例如你想设置密码为 `mypassword123`，则执行：
+
+```bash
+node -e "const {hashSync}=require('bcryptjs');console.log(hashSync('mypassword123',10))"
+```
+
+输出类似 `$2b$10$7snwoMLslppW8342uPR4yeAr/9.0WSLjvap/iHzC4L7VT8jJg1KTS`，复制这个值。
+
+**步骤 2：填入 .env**
+
+```bash
+ADMIN_USERNAME=你的账号名        # 例如：zhangsan
+ADMIN_PASSWORD_HASH=$2b$10$...   # 上一步生成的完整哈希
+```
+
+> ⚠️ `ADMIN_PASSWORD_HASH` 是 bcrypt 哈希，**不是明文密码**。如果你直接填明文密码，登录将永远失败。
+
+**步骤 3：登录时使用**
+
+部署完成后，打开网站，在登录页输入：
+- 账号：你在 `ADMIN_USERNAME` 中设置的值
+- 密码：你在生成哈希时输入的原始密码（不是哈希值）
+
+#### 4.1.3 完整 .env 示例
+
+```bash
+DATABASE_URL=file:/home/baicaoji/baicaoji/prisma/dev.db
+SESSION_SECRET=kX7mP2qR8vL5nJ3wY6aB9dE1fH4gT7sM0cV2xZ5uI8oP3rA6dC9
+ADMIN_USERNAME=zhangsan
+ADMIN_PASSWORD_HASH=$2b$10$7snwoMLslppW8342uPR4yeAr/9.0WSLjvap/iHzC4L7VT8jJg1KTS
+```
+
+#### 4.1.4 修改密码
+
+后续如需修改账号或密码，直接编辑 `.env` 文件中的 `ADMIN_USERNAME` 和 `ADMIN_PASSWORD_HASH`，然后重启应用：
+
+```bash
+pm2 restart baicaoji
+```
 
 ### 4.2 生成 Prisma Client 并初始化数据库
 
@@ -538,7 +607,7 @@ pm2 restart baicaoji
 | 2 | 安装 Node.js 20 + PM2 + Nginx | ☐ |
 | 3 | 上传代码 / Git clone | ☐ |
 | 4 | `npm ci` 安装依赖 | ☐ |
-| 5 | 创建 `.env` 文件（绝对路径 DATABASE_URL） | ☐ |
+| 5 | 创建 `.env` 文件（绝对路径 DATABASE_URL + SESSION_SECRET + 账号密码） | ☐ |
 | 6 | `npx prisma generate && npx prisma db push` | ☐ |
 | 7 | `npm run build` 构建生产版本 | ☐ |
 | 8 | 配置 Nginx 反向代理 → `localhost:3000` | ☐ |
