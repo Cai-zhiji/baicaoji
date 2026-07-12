@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,13 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { useMutation } from "@/lib/use-mutation";
 import { formatDate, getEvaluationColor } from "@/lib/utils";
@@ -34,8 +34,12 @@ import {
   MessageSquarePlus,
   RotateCcw,
   Trash2,
+  MoreHorizontal,
+  User,
+  X,
+  ScrollText,
 } from "lucide-react";
-import type { Patient, FollowUp, Prescription, PrescriptionItem } from "@/lib/types";
+import type { Patient, FollowUp, Prescription } from "@/lib/types";
 import { patientToOption } from "@/lib/option-factory";
 
 const EVALUATIONS = [
@@ -53,6 +57,7 @@ export default function PrescriptionsPage() {
   const [search, setSearch] = useState("");
   const [patientFilterId, setPatientFilterId] = useState<number | null>(null);
   const [patientFilterName, setPatientFilterName] = useState("");
+  const [patientPickerOpen, setPatientPickerOpen] = useState(false);
   const [patientSearch, setPatientSearch] = useState("");
   const [selected, setSelected] = useState<Prescription | null>(null);
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -95,7 +100,6 @@ export default function PrescriptionsPage() {
     fetch(`/api/follow-ups?prescriptionId=${prescriptionId}`)
       .then((r) => r.json())
       .then((data) => {
-        // 确保响应仍对应当前选中的药方
         if (selectedRxRef.current === prescriptionId) {
           setFollowUps(data);
         }
@@ -179,19 +183,16 @@ export default function PrescriptionsPage() {
     }
   };
 
-  /** 跳转到开方页预填药材（不绑定病人） */
   function rePrescribe(p: Prescription) {
     const params = new URLSearchParams();
     params.set("rxId", p.id.toString());
     router.push(`/?${params.toString()}`);
   }
 
-  /** 复制药方到剪贴板 */
   async function copyPrescription(p: Prescription) {
     const text = p.items
       .map((item) => `${item.herb?.name ?? item.herbName} ${item.grams}g`)
       .join("、");
-
     try {
       await navigator.clipboard.writeText(text);
       toast.success("药方已复制到剪贴板");
@@ -206,138 +207,182 @@ export default function PrescriptionsPage() {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-[18px] font-[590] tracking-[-0.01em]">历史药方</h1>
-        {prescriptions.length > 0 && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setShowClearConfirm(true)}
-            disabled={clearing}
-            className="text-[11px] text-(--muted)"
-          >
-            清空
-          </Button>
-        )}
-      </div>
+    <div className="flex flex-col gap-2 pb-6">
+      {/* Sticky header */}
+      <div
+        className="sticky top-0 z-10 -mx-4 flex flex-col gap-2 border-b border-(--border) px-4 py-2"
+        style={{ background: "var(--bg)" }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-[17px] font-[590] tracking-[-0.01em]">历史药方</h1>
+            <span className="text-[12px] text-(--muted) tabular-nums">
+              {filtered.length}
+              {filtered.length !== prescriptions.length && ` / ${prescriptions.length}`}
+            </span>
+          </div>
+          {prescriptions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="更多操作">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => setShowClearConfirm(true)}
+                  className="text-(--danger)"
+                >
+                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                  清空全部
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
 
-      {/* Filters */}
-      <div className="panel p-3 space-y-2">
-        <Input
-          placeholder="搜索病人或药材…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-[12px] text-(--muted)">按病人：</span>
+          <div className="flex-1">
+            <Input
+              placeholder="搜索病人或药材…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           {patientFilterName ? (
-            <div className="flex items-center gap-2 rounded-[var(--radius-pill)] border border-(--border) bg-(--accent-soft) px-3 py-1">
-              <span className="text-[13px] font-medium">{patientFilterName}</span>
+            <div
+              className="flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5"
+              style={{ background: "var(--accent-soft)" }}
+            >
+              <User className="h-3 w-3" style={{ color: "var(--accent)" }} />
+              <span className="max-w-[64px] truncate text-[12px] font-[510]">
+                {patientFilterName}
+              </span>
               <button
                 type="button"
                 onClick={() => {
                   setPatientFilterId(null);
                   setPatientFilterName("");
-                  setPatientSearch("");
                 }}
-                className="text-[11px] text-(--muted) underline"
+                aria-label="清除病人筛选"
               >
-                清除
+                <X className="h-3 w-3 text-(--muted)" />
               </button>
             </div>
           ) : (
-            <InlineCombobox<Patient>
-              options={patientOptions}
-              placeholder="全部病人"
-              value={patientSearch}
-              onChange={setPatientSearch}
-              maxResults={5}
-              inputClassName="!h-9 !text-[13px]"
-              onSelect={(opt) => {
-                setPatientFilterId(opt.data!.id);
-                setPatientFilterName(opt.data!.name);
-                setPatientSearch("");
-              }}
-            />
+            <button
+              type="button"
+              onClick={() => setPatientPickerOpen(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-(--muted) transition-colors hover:bg-(--accent-soft)"
+              aria-label="按病人筛选"
+            >
+              <User className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </button>
           )}
         </div>
       </div>
 
-      {/* Prescription list */}
+      {/* List */}
       <div className="panel overflow-hidden">
         {filtered.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[13px] text-(--muted)">
-            暂无药方记录
-          </p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <ScrollText
+              className="mb-3 h-10 w-10"
+              style={{ color: "var(--muted)", opacity: 0.5 }}
+              strokeWidth={1.5}
+            />
+            <p className="text-[13px] text-(--muted)">
+              {prescriptions.length === 0 ? "暂无药方记录" : "无匹配结果"}
+            </p>
+          </div>
         ) : (
-          filtered.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => openDetail(p)}
-              className="flex w-full items-center justify-between border-b border-(--border) px-4 py-3 text-left transition-colors hover:bg-(--accent-soft) last:border-b-0"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium text-(--fg)">
-                    {p.patient?.name || "散客"}
-                  </span>
-                  <span className="text-[11px] text-(--muted)">
-                    {formatDate(p.createdAt)}
-                  </span>
-                </div>
-                <div className="mt-0.5 flex gap-1.5">
-                  {p.items.slice(0, 4).map((item) => (
-                    <span key={item.id} className="text-[11px] text-(--muted)">
-                      {item.herb?.name ?? item.herbName}
+          <div className="divide-y divide-(--border)/60">
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => openDetail(p)}
+                className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-(--accent-soft)"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[14px] font-[510] text-(--fg)">
+                      {p.patient?.name || "散客"}
                     </span>
-                  ))}
-                  {p.items.length > 4 && (
-                    <span className="text-[11px] text-(--muted)">
-                      +{p.items.length - 4}
+                    <span className="text-[11px] text-(--muted) tabular-nums">
+                      {formatDate(p.createdAt)}
                     </span>
-                  )}
+                  </div>
+                  <div className="mt-1 truncate text-[12px] text-(--muted)">
+                    {p.items.slice(0, 4).map((i) => i.herb?.name ?? i.herbName).join(" · ")}
+                    {p.items.length > 4 && ` +${p.items.length - 4}`}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[15px] font-[590] tabular-nums">
-                  ¥{p.totalPrice.toFixed(2)}
-                </span>
-                <ChevronRight className="h-4 w-4 text-(--muted)" />
-              </div>
-            </button>
-          ))
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-[15px] font-[590] tabular-nums text-(--fg)">
+                    ¥{p.totalPrice.toFixed(2)}
+                  </span>
+                  <ChevronRight className="h-4 w-4 text-(--muted)" />
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Detail dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent
-          className="max-h-[85vh] max-w-sm overflow-y-auto"
-          style={{
-            borderRadius: "var(--radius-xl-val)",
-          }}
+      {/* Patient filter picker */}
+      <Sheet open={patientPickerOpen} onOpenChange={setPatientPickerOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[70dvh] rounded-t-[var(--radius-xl-val)] pb-[env(safe-area-inset-bottom,12px)]"
         >
-          <DialogHeader>
-            <DialogTitle>
-              {selected?.patient?.name || "散客"} 的药方
-            </DialogTitle>
-          </DialogHeader>
+          <SheetHeader className="pb-2">
+            <SheetTitle>按病人筛选</SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-4">
+            <InlineCombobox<Patient>
+              options={patientOptions}
+              placeholder="搜索病人姓名或拼音…"
+              value={patientSearch}
+              onChange={setPatientSearch}
+              maxResults={8}
+              showAllOnEmpty
+              autoFocus
+              onSelect={(opt) => {
+                setPatientFilterId(opt.data!.id);
+                setPatientFilterName(opt.data!.name);
+                setPatientSearch("");
+                setPatientPickerOpen(false);
+              }}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Detail sheet */}
+      <Sheet open={detailOpen} onOpenChange={setDetailOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[90dvh] overflow-y-auto rounded-t-[var(--radius-xl-val)] pb-[env(safe-area-inset-bottom,12px)]"
+        >
+          <SheetHeader className="pb-2">
+            <SheetTitle>
+              {selected?.patient?.name || "散客"} · 药方详情
+            </SheetTitle>
+          </SheetHeader>
           {selected && (
-            <div className="space-y-5">
-              <div className="flex items-center justify-between text-[12px] text-(--muted)">
-                <span>
-                  {formatDate(selected.createdAt, "full")}
+            <div className="space-y-4 px-4 pb-4">
+              {/* Meta + action bar */}
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] text-(--muted)">
+                  {formatDate(selected.createdAt, "full")} · {selected.items.length} 味
                 </span>
-                <div className="flex items-center gap-3">
-                  <span>
-                    {selected.items.length} 味药
-                  </span>
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={() => copyPrescription(selected)}
-                    className="inline-flex items-center gap-1 text-[11px] text-(--muted) hover:text-(--fg)"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] text-(--muted) transition-colors hover:bg-(--accent-soft) hover:text-(--fg)"
                   >
                     <Copy className="h-3 w-3" />
                     复制
@@ -345,7 +390,7 @@ export default function PrescriptionsPage() {
                   <button
                     type="button"
                     onClick={() => { setDetailOpen(false); rePrescribe(selected); }}
-                    className="inline-flex items-center gap-1 text-[11px] text-(--accent) hover:underline"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] text-(--accent) transition-colors hover:bg-(--accent-soft)"
                   >
                     <RotateCcw className="h-3 w-3" />
                     再开
@@ -353,7 +398,7 @@ export default function PrescriptionsPage() {
                   <button
                     type="button"
                     onClick={() => setDeleteTarget(selected)}
-                    className="inline-flex items-center gap-1 text-[11px] text-(--danger) hover:underline"
+                    className="inline-flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] text-(--danger) transition-colors hover:bg-(--danger-soft)"
                   >
                     <Trash2 className="h-3 w-3" />
                     删除
@@ -362,70 +407,73 @@ export default function PrescriptionsPage() {
               </div>
 
               {/* Items */}
-              <div className="space-y-1">
+              <div className="rounded-[var(--radius-val)] border border-(--border) overflow-hidden divide-y divide-(--border)/60">
                 {selected.items.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between rounded-[8px] bg-(--accent-soft) px-3 py-2 text-[13px]"
+                    className="flex items-center justify-between px-3 py-2.5"
                   >
-                    <span className="font-medium">{item.herb?.name ?? item.herbName}</span>
-                    <div className="flex items-center gap-3 text-(--muted)">
+                    <span className="text-[13px] font-[510]">{item.herb?.name ?? item.herbName}</span>
+                    <div className="flex items-center gap-3 text-[12px] text-(--muted) tabular-nums">
                       <span>{item.grams}g</span>
                       <span>¥{item.unitPrice.toFixed(2)}/g</span>
-                      <span className="font-medium text-(--fg)">
+                      <span className="text-[13px] font-[590] text-(--fg)">
                         ¥{(item.grams * item.unitPrice).toFixed(2)}
                       </span>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[13px] text-(--muted)">总价</span>
-                <span className="text-[18px] font-[590]">
+
+              {/* Total */}
+              <div className="flex items-center justify-between rounded-[var(--radius-val)] bg-(--accent-soft) px-3 py-2.5">
+                <span className="text-[13px] text-(--fg-secondary)">总价</span>
+                <span className="text-[22px] font-[620] tabular-nums tracking-[-0.02em] text-(--fg)">
                   ¥{selected.totalPrice.toFixed(2)}
                 </span>
               </div>
 
               {/* Follow-ups */}
-              <div className="space-y-3 border-t border-(--border) pt-4">
+              <div className="space-y-2 border-t border-(--border) pt-4">
                 <h4 className="flex items-center gap-2 text-[13px] font-[510]">
                   <MessageSquarePlus className="h-4 w-4" />
                   随访记录
+                  {followUps.length > 0 && (
+                    <span className="text-[11px] text-(--muted)">
+                      {followUps.length}
+                    </span>
+                  )}
                 </h4>
 
-                {followUps.map((f) => (
-                  <div
-                    key={f.id}
-                    className="rounded-[8px] border border-(--border) bg-(--bg) p-3 text-[13px]"
-                  >
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        variant="outline"
-                        className={getEvaluationColor(f.evaluation)}
+                {followUps.length === 0 ? (
+                  <p className="py-2 text-[12px] text-(--muted)">暂无随访</p>
+                ) : (
+                  <div className="space-y-2">
+                    {followUps.map((f) => (
+                      <div
+                        key={f.id}
+                        className="rounded-[var(--radius-sm-val)] border border-(--border) bg-(--bg) p-3 text-[13px]"
                       >
-                        {f.evaluation}
-                      </Badge>
-                      <span className="text-[11px] text-(--muted)">
-                        {new Date(f.createdAt).toLocaleString("zh-CN", {
-                          month: "2-digit",
-                          day: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    {f.note && (
-                      <p className="mt-2 text-(--muted)">{f.note}</p>
-                    )}
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className={getEvaluationColor(f.evaluation)}>
+                            {f.evaluation}
+                          </Badge>
+                          <span className="text-[11px] text-(--muted) tabular-nums">
+                            {new Date(f.createdAt).toLocaleString("zh-CN", {
+                              month: "2-digit",
+                              day: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                        {f.note && <p className="mt-1.5 text-(--muted)">{f.note}</p>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {followUps.length === 0 && (
-                  <p className="text-[12px] text-(--muted)">暂无随访</p>
                 )}
 
                 {/* Add follow-up */}
-                <div className="space-y-3 rounded-[8px] border border-(--border) bg-(--bg) p-3">
-                  <p className="text-[11px] font-[510] text-(--muted)">
-                    添加随访
-                  </p>
+                <div className="space-y-2 rounded-[var(--radius-sm-val)] border border-(--border) bg-(--bg) p-3">
+                  <p className="text-[11px] font-[510] text-(--muted)">添加随访</p>
                   <Select value={newEvaluation} onValueChange={(v) => setNewEvaluation(v ?? "")}>
                     <SelectTrigger>
                       <SelectValue placeholder="效果评价…" />
@@ -456,10 +504,9 @@ export default function PrescriptionsPage() {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
-      {/* Clear all confirmation */}
       <ConfirmDialog
         open={showClearConfirm && !deleteTarget}
         onOpenChange={(v) => { if (!v) setShowClearConfirm(false); }}
@@ -471,7 +518,6 @@ export default function PrescriptionsPage() {
         loading={clearing}
       />
 
-      {/* Delete confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(v) => { if (!v) setDeleteTarget(null); }}

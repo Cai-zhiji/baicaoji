@@ -264,3 +264,24 @@
     display: none;
   }
 }
+
+/* ========================================
+   开方页专用工具类
+   ======================================== */
+
+/* 药材行左侧库存警告竖条 */
+@utility stock-bar-warn {
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+@utility stock-bar-danger {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+/* 吸底玻璃条 */
+@utility sticky-bottom-bar {
+  background: var(--glass-bg-heavy);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(1.2);
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(1.2);
+  border-top: 1px solid var(--glass-border);
+}
