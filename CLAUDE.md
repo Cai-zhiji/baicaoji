@@ -9,7 +9,7 @@
 - **前端**：Next.js (App Router) + TypeScript + Tailwind CSS + shadcn/ui
 - **后端**：Next.js API Routes / Server Actions
 - **数据库**：SQLite + Prisma ORM
-- **认证**：iron-session + bcrypt 单密码登录
+- **认证**：无（免登录直接访问）
 - **PWA**：@serwist/next
 - **部署**：阿里云轻量服务器
 

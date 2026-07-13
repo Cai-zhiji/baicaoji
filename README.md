@@ -9,7 +9,7 @@
 | 前端框架 | Next.js 16 (App Router) + TypeScript |
 | 样式 | Tailwind CSS 4 + shadcn/ui |
 | 数据库 | SQLite + Prisma ORM |
-| 认证 | iron-session 加密会话（单密码登录） |
+| 认证 | 无（免登录直接访问） |
 | PWA | Service Worker（仅生产环境） |
 | 部署 | 阿里云轻量服务器 |
 
@@ -22,20 +22,11 @@ npm install
 # 初始化数据库
 npx prisma db push
 
-# 配置环境变量（从 .env.example 复制）
-cp .env.example .env
-# 编辑 .env，设置 SESSION_SECRET、ADMIN_USERNAME、ADMIN_PASSWORD_HASH
-
-# 生成密码哈希
-node -e "const {hashSync}=require('bcryptjs');console.log(hashSync('your-password',10))"
-
 # 启动开发服务器
 npm run dev
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)，使用 `.env` 中配置的账号密码登录。
-
-登录后 30 天内无需重复登录。
+打开 [http://localhost:3000](http://localhost:3000) 即可使用。
 
 ## 项目结构
 
@@ -55,7 +46,7 @@ npm run dev
 │   └── icon-*.png            # PWA 图标
 ├── src/
 │   ├── app/
-│   │   ├── (main)/           # 主布局页面（需登录）
+│   │   ├── (main)/           # 主布局页面
 │   │   │   ├── page.tsx              # 开方（首页）
 │   │   │   ├── patients/             # 病人管理
 │   │   │   ├── herbs/                # 药材管理
@@ -63,9 +54,7 @@ npm run dev
 │   │   │   ├── inventory/            # 库存管理
 │   │   │   ├── stats/                # 统计
 │   │   │   └── templates/            # 模版管理
-│   │   ├── login/             # 登录页
 │   │   ├── api/               # API 路由
-│   │   │   ├── auth/          # 登录/登出
 │   │   │   ├── herbs/         # 药材 CRUD + CSV 导入
 │   │   │   ├── patients/      # 病人 CRUD + CSV 导入
 │   │   │   ├── prescriptions/ # 药方 CRUD
@@ -74,12 +63,11 @@ npm run dev
 │   │   │   ├── follow-ups/    # 随访记录
 │   │   │   ├── stats/         # 利润统计
 │   │   │   └── export/        # 全量数据导出
-│   │   ├── globals.css        # 全局样式（竹素 v2.0 设计系统）
-│   │   └── middleware.ts      # 路由守卫（未登录跳转 /login）
+│   │   └── globals.css        # 全局样式（竹素 v2.0 设计系统）
 │   ├── components/
-│   │   ├── layout/            # 布局组件（侧边栏、老年模式、主题、登出）
+│   │   ├── layout/            # 布局组件（侧边栏、老年模式、主题）
 │   │   └── ui/                # shadcn/ui 组件 + 共享业务组件
-│   ├── lib/                   # 工具函数 + 共享类型 + session 配置
+│   ├── lib/                   # 工具函数 + 共享类型
 │   ├── services/              # 业务逻辑层
 │   │   ├── herbs.ts           # 药材（CRUD + 库存联动）
 │   │   ├── stock.ts           # 库存（扣减/退回/进货）
@@ -93,12 +81,6 @@ npm run dev
 ```
 
 ## 功能概览
-
-### 登录
-- 单账号登录（通过环境变量 `ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH` 配置）
-- bcrypt 密码哈希存储
-- iron-session 加密 cookie，30 天免登录
-- 登出按钮在顶栏右侧
 
 ### 开方（首页）
 - 拼音/汉字搜索病人和药材
@@ -209,20 +191,9 @@ npm run dev
 ```bash
 # .env
 DATABASE_URL=file:./dev.db
-SESSION_SECRET=<至少 32 字符的随机字符串>
-ADMIN_USERNAME=<登录账号>
-ADMIN_PASSWORD_HASH=<bcrypt 密码哈希>
 ```
 
-生成 `SESSION_SECRET`：
-```bash
-openssl rand -base64 32
-```
-
-生成 `ADMIN_PASSWORD_HASH`：
-```bash
-node -e "const {hashSync}=require('bcryptjs');console.log(hashSync('your-password',10))"
-```
+应用无需额外配置即可运行。如需指定数据库路径，修改 `DATABASE_URL` 即可。
 
 ---
 
@@ -239,7 +210,7 @@ npx prisma studio    # 打开数据库管理界面
 
 ## 领域规则
 
-- **单人使用**：单密码登录，无多用户/权限体系
+- **免登录使用**：直接访问，无账号密码
 - **病人以姓名为唯一标识**：同名自动归并
 - **药方总价** = Σ(每味药材售价 × 克数)，精确到分；成本同步计算
 - **药材搜索**：拼音首字母 + 汉字搜索
@@ -267,6 +238,278 @@ Route Handler（HTTP 适配，薄层）
 ## 设计系统
 
 百草计使用「竹素 v2.0」设计系统：翠玉绿主色 × 冷净微绿中性色 × 液态玻璃质感。详见 `src/app/globals.css`。
+
+## 云端部署指南
+
+本指南面向阿里云轻量应用服务器（Ubuntu 22.04），其他 Linux 发行版步骤类似。
+
+---
+
+### 1. 服务器准备
+
+```bash
+# 更新系统
+sudo apt update && sudo apt upgrade -y
+
+# 安装 Node.js 20（推荐使用 nvm）
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 20
+nvm use 20
+
+# 验证
+node -v   # 应输出 v20.x.x
+npm -v    # 应输出 10.x.x
+
+# 安装 Nginx
+sudo apt install nginx -y
+
+# 安装 PM2（进程守护）
+npm install -g pm2
+```
+
+---
+
+### 2. 部署应用
+
+```bash
+# 克隆仓库
+cd /home/admin
+git clone <your-repo-url> baicaoji
+cd baicaoji
+
+# 安装依赖
+npm ci
+
+# 初始化数据库
+npx prisma db push
+
+# 构建生产版本
+npm run build
+
+# 用 PM2 启动
+pm2 start npm --name "baicaoji" -- start
+pm2 save
+pm2 startup   # 设置开机自启
+```
+
+---
+
+### 3. Nginx 反向代理
+
+创建 Nginx 配置：
+
+```bash
+sudo nano /etc/nginx/sites-available/baicaoji
+```
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;  # 替换为你的域名或服务器 IP
+
+    # 日志
+    access_log /var/log/nginx/baicaoji-access.log;
+    error_log  /var/log/nginx/baicaoji-error.log;
+
+    # 客户端上传大小限制（CSV 导入）
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+启用站点：
+
+```bash
+sudo ln -s /etc/nginx/sites-available/baicaoji /etc/nginx/sites-enabled/
+sudo nginx -t          # 检查配置
+sudo systemctl reload nginx
+```
+
+---
+
+### 4. 配置 HTTPS（推荐）
+
+使用 Let's Encrypt 免费证书：
+
+```bash
+# 安装 certbot
+sudo apt install certbot python3-certbot-nginx -y
+
+# 自动获取证书并配置 Nginx
+sudo certbot --nginx -d your-domain.com
+
+# 证书会自动续期（已内置 systemd timer）
+sudo systemctl status certbot.timer
+```
+
+---
+
+### 5. 数据库备份
+
+SQLite 数据库是单文件，备份很简单。添加定时备份脚本：
+
+```bash
+# 创建备份脚本
+sudo nano /home/admin/backup-db.sh
+```
+
+```bash
+#!/bin/bash
+BACKUP_DIR="/home/admin/backups"
+DB_PATH="/home/admin/baicaoji/prisma/dev.db"
+RETENTION_DAYS=30
+
+mkdir -p "$BACKUP_DIR"
+cp "$DB_PATH" "$BACKUP_DIR/dev-$(date +%Y%m%d-%H%M%S).db"
+
+# 删除 30 天前的旧备份
+find "$BACKUP_DIR" -name "dev-*.db" -mtime +$RETENTION_DAYS -delete
+```
+
+```bash
+chmod +x /home/admin/backup-db.sh
+
+# 添加到 crontab（每天凌晨 2 点备份）
+(crontab -l 2>/dev/null; echo "0 2 * * * /home/admin/backup-db.sh") | crontab -
+```
+
+> ⚠️ **注意**：SQLite 备份时需要保证数据库不被写入。PM2 单实例部署时，Node.js 单线程保证了这一点。若使用多实例负载均衡，需改用 `sqlite3` 命令的 `.backup` 方式。
+
+---
+
+### 6. 更新部署
+
+每次推送新版本后，在服务器上执行：
+
+```bash
+cd /home/admin/baicaoji
+git pull
+npm ci
+npx prisma db push   # 同步数据库结构变更
+npm run build
+pm2 reload baicaoji
+```
+
+可保存为脚本 `/home/admin/update.sh`：
+
+```bash
+#!/bin/bash
+set -e
+cd /home/admin/baicaoji
+echo "📥 拉取最新代码..."
+git pull
+echo "📦 安装依赖..."
+npm ci
+echo "🗄️ 同步数据库..."
+npx prisma db push
+echo "🔨 构建..."
+npm run build
+echo "🔄 重启服务..."
+pm2 reload baicaoji
+echo "✅ 部署完成"
+```
+
+---
+
+### 7. 常用运维命令
+
+```bash
+pm2 status              # 查看服务状态
+pm2 logs baicaoji       # 查看实时日志
+pm2 monit               # 实时监控面板
+pm2 reload baicaoji     # 零停机重启
+
+# Nginx
+sudo systemctl status nginx
+sudo nginx -t            # 检查配置
+sudo tail -f /var/log/nginx/baicaoji-error.log
+```
+
+---
+
+### 8. 防火墙配置
+
+阿里云轻量服务器需在**控制台防火墙**放行以下端口：
+
+| 端口 | 用途 |
+|------|------|
+| 22 | SSH |
+| 80 | HTTP |
+| 443 | HTTPS |
+
+服务器本地防火墙（如有）：
+
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+---
+
+### 9. 首次部署检查清单
+
+- [ ] Node.js 20+ 已安装
+- [ ] `npx prisma db push` 执行成功，数据库文件已生成
+- [ ] `npm run build` 无错误
+- [ ] PM2 已启动，`pm2 status` 显示 `online`
+- [ ] Nginx 配置正确，域名/公网 IP 可访问
+- [ ] HTTPS 证书已配置
+- [ ] 数据库备份脚本已添加到 crontab
+- [ ] 防火墙已放行 80、443 端口
+
+---
+
+### 进阶：Docker 部署
+
+如需容器化部署：
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package*.json ./
+RUN npm ci
+
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate
+RUN npm run build
+
+FROM base AS runner
+RUN apk add --no-cache sqlite
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/public ./public
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+CMD ["node", "server.js"]
+```
+
+> Docker 部署需在 `next.config.ts` 中添加 `output: "standalone"`，并将 SQLite 数据库文件通过 volume 挂载到宿主机。
+
+---
 
 ## License
 
