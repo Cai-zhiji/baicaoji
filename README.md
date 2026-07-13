@@ -1,4 +1,4 @@
-# 百草计
+# 百草计 [![v0.7.0](https://img.shields.io/badge/version-0.7.0-4ade80?labelColor=166534)]() [![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)]() [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)]()
 
 面向中医从业者的轻量级 Web 应用：药材管理、药方计价、病人管理、库存与利润统计。
 
@@ -32,8 +32,8 @@ npm run dev
 
 ```
 百草计/
-├── docs/                    # 规划文档
-│   ├── PRD.md               # 产品需求文档
+├── docs/                     # 规划文档
+│   ├── PRD.md                # 产品需求文档
 │   ├── CONTEXT.md            # 领域词汇表
 │   ├── task_plan.md          # 开发计划
 │   ├── findings.md           # 技术调研与踩坑记录
@@ -58,16 +58,34 @@ npm run dev
 │   │   │   ├── herbs/         # 药材 CRUD + CSV 导入
 │   │   │   ├── patients/      # 病人 CRUD + CSV 导入
 │   │   │   ├── prescriptions/ # 药方 CRUD
-│   │   │   ├── templates/     # 模版 CRUD + CSV 导入
+│   │   │   ├── templates/     # 模版 CRUD + CSV 导入 + 模版药材管理
 │   │   │   ├── inventory/     # 库存记录
 │   │   │   ├── follow-ups/    # 随访记录
 │   │   │   ├── stats/         # 利润统计
 │   │   │   └── export/        # 全量数据导出
 │   │   └── globals.css        # 全局样式（竹素 v2.0 设计系统）
 │   ├── components/
-│   │   ├── layout/            # 布局组件（侧边栏、老年模式、主题）
-│   │   └── ui/                # shadcn/ui 组件 + 共享业务组件
+│   │   ├── layout/            # 布局组件（侧边栏、老年模式、主题切换、PWA 注册）
+│   │   ├── ui/                # shadcn/ui 组件 + 共享业务组件
+│   │   │   ├── sheet/         # 底部弹出面板
+│   │   │   ├── dropdown-menu/ # 下拉菜单
+│   │   │   ├── command/       # 搜索式命令面板
+│   │   │   ├── popover/       # 弹出卡片
+│   │   │   ├── tabs/          # 选项卡
+│   │   │   ├── sonner/        # 顶部 Toast 通知
+│   │   │   ├── empty-state/   # 空状态占位
+│   │   │   ├── confirm-dialog/ # 确认弹窗
+│   │   │   └── csv-import-button/ # CSV 导入按钮
+│   │   ├── prescription/      # 药方组件（处方明细列表）
+│   │   └── templates/         # 模版组件（药材管理、模版编辑面板）
 │   ├── lib/                   # 工具函数 + 共享类型
+│   │   ├── csv-import.ts      # CSV 解析引擎（统一导入流程）
+│   │   ├── pinyin.ts          # 拼音转换
+│   │   ├── search-tokens.ts   # 拼音首字母 + 汉字分词索引
+│   │   ├── validate.ts        # 数据校验
+│   │   ├── uow.ts             # 工作单元（事务协调器）
+│   │   ├── use-api.ts         # API 请求 Hook
+│   │   └── use-mutation.ts    # 通用变更 Hook
 │   ├── services/              # 业务逻辑层
 │   │   ├── herbs.ts           # 药材（CRUD + 库存联动）
 │   │   ├── stock.ts           # 库存（扣减/退回/进货）
@@ -76,19 +94,26 @@ npm run dev
 │   │   ├── stats.ts           # 统计（利润计算 + 药材排行）
 │   │   └── errors.ts          # 错误处理（Prisma 错误分类）
 │   └── generated/             # Prisma Client 生成目录
-├── package.json
-└── README.md
+├── examples/                  # CSV 导入示例
+│   ├── herbs-example.csv      # 药材导入示例
+│   ├── patients-example.csv   # 病人导入示例
+│   ├── templates-full.csv     # 模版导入示例（含 292 首经方）
+│   └── 中药经方.csv           # 经方药材导入
+├── CLAUDE.md                  # AI 辅助开发指引
+├── AGENTS.md                  # 代理工具链配置
+└── VERSION                    # 当前版本号
 ```
 
 ## 功能概览
 
 ### 开方（首页）
-- 拼音/汉字搜索病人和药材
-- 快速新建病人
-- 药材克数编辑，实时计算总价
-- 库存不足告警
-- 保存为药方模版 / 搜索加载模版
-- 「再开」历史药方
+- 拼音/汉字搜索病人和药材（支持拼音首字母快速定位）
+- 快速新建病人（弹窗输入，一键创建）
+- 药材克数编辑，实时计算总价与成本
+- 库存不足告警（标红提示）
+- 模版加载：搜索并展开模版药材，一键填入
+- 「再开」历史药方（复制药材组合后自定义克数）
+- 下拉菜单/Sheet 面板：新增病人、选择模版均使用底部弹出面板，手机端体验友好
 
 ### 病人管理 `/patients`
 - 增删改查，拼音搜索
@@ -96,28 +121,34 @@ npm run dev
 - 同名病人自动归并
 
 ### 药材管理 `/herbs`
-- 增删改查，拼音搜索 + A-Z 字母索引
-- CSV 批量导入
+- 增删改查，拼音搜索 + A-Z 字母索引（拖拽滚动条快速定位）
+- CSV 批量导入（自动跳过重复项，反馈导入结果）
+- 库存色标：低库存药材以橙色/红色背景高亮
 
 ### 药方记录 `/prescriptions`
 - 历史药方列表，按病人筛选
-- 点击查看明细（药材、克数、单价、小计）
-- **复制药方**到剪贴板
+- 点击查看明细（药材、克数、单价、小计、成本）
+- **复制药方**到剪贴板（纯文本格式，可直接粘贴分享）
 - **再开**：基于历史药方快速开新方
 - 随访评价（痊愈 / 显效 / 有效 / 无效 / 加重）
+- **复制按钮**：药方单页一键复制所有明细
 
 ### 库存管理 `/inventory`
-- 药材进货登记
-- 库存变动记录
+- 药材进货登记（自动带出药材名）
+- 库存变动流水记录
+- 库存色标：安全库存绿色 / 预警橙色 / 短缺红色
 - 库存扣减（保存药方时自动执行，删除药方时自动退回）
+- 统计卡片：总库存品种数、低库存告警汇总
 
 ### 统计 `/stats`
 - 收入 / 成本 / 利润概览（支持按月/按季度筛选）
 - 药材用量与利润排行
+- 统计卡片：总收入、总成本、总利润、药方数量一目了然
 
 ### 模版管理 `/templates`
-- 增删改查，A-Z 字母索引
+- 增删改查，A-Z 字母索引（拖拽滚动条快速定位）
 - CSV 批量导入（支持克数单位转换：枚/片/升/合）
+- 模版药材编辑：Sheet 面板内自由增删药材、调整克数
 - 最近使用排序
 
 ### 老年模式
@@ -184,6 +215,8 @@ npm run dev
 
 > 模版中引用的药材必须在药材管理中已存在，不存在的药材会被跳过并提示。
 
+> 💡 `examples/` 目录下提供了药材、病人、模版的 CSV 示例文件，以及含 292 首经方的模版批量导入文件，可直接参考使用。
+
 ---
 
 ## 环境变量
@@ -231,10 +264,14 @@ Route Handler（HTTP 适配，薄层）
     → Prisma（数据访问）
 ```
 
+- **uow.ts**：工作单元模式，封装数据库事务（开方事务 = 成本计算 → 价格快照 → 库存扣减）
 - **stock.ts**：所有库存操作统一入口（扣减/退回/进货），支持事务
-- **prescriptions.ts**：封装完整开方事务（成本计算 → 价格快照 → 库存扣减）
-- **templates.ts**：模版 CRUD + DTO 序列化
+- **prescriptions.ts**：药方 CRUD + 开方事务编排
+- **templates.ts**：模版 CRUD + DTO 序列化 + 模版药材管理
 - **stats.ts**：利润聚合 + `roundToCent` 共享工具
+- **csv-import.ts**：统一 CSV 解析引擎（药材/病人/模版共用文件读取、列映射、校验逻辑）
+- **search-tokens.ts**：拼音首字母 + 汉字分词索引生成（支持高效搜索）
+- **errors.ts**：Prisma 错误分类与用户友好提示
 
 ## 设计系统
 
