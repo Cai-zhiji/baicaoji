@@ -191,6 +191,7 @@ npm run dev
 ```bash
 # .env
 DATABASE_URL=file:./dev.db
+PORT=3000              # 本地开发默认 3000，服务器部署改为实际端口（如 3002）
 ```
 
 应用无需额外配置即可运行。如需指定数据库路径，修改 `DATABASE_URL` 即可。

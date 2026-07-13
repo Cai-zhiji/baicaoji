@@ -334,8 +334,8 @@ export default function PrescriptionsPage() {
       {/* Patient filter picker */}
       <Sheet open={patientPickerOpen} onOpenChange={setPatientPickerOpen}>
         <SheetContent
-          side="bottom"
-          className="max-h-[70dvh] rounded-t-[var(--radius-xl-val)] pb-[env(safe-area-inset-bottom,12px)]"
+          side="top"
+          className="max-h-[50dvh] rounded-b-(--radius-xl-val) pt-[env(safe-area-inset-top,12px)]"
         >
           <SheetHeader className="pb-2">
             <SheetTitle>按病人筛选</SheetTitle>

@@ -574,8 +574,8 @@ export default function PrescriptionPage() {
       {/* ── 选病人抽屉 ── */}
       <Sheet open={patientSheetOpen} onOpenChange={setPatientSheetOpen}>
         <SheetContent
-          side="bottom"
-          className="max-h-[80dvh] rounded-t-[var(--radius-xl-val)] pb-[env(safe-area-inset-bottom,12px)]"
+          side="top"
+          className="max-h-[55dvh] rounded-b-(--radius-xl-val) pt-[env(safe-area-inset-top,12px)]"
         >
           <SheetHeader className="pb-2">
             <SheetTitle>关联病人</SheetTitle>
@@ -614,8 +614,8 @@ export default function PrescriptionPage() {
       {/* ── 选模版抽屉 ── */}
       <Sheet open={templateSheetOpen} onOpenChange={setTemplateSheetOpen}>
         <SheetContent
-          side="bottom"
-          className="max-h-[80dvh] rounded-t-[var(--radius-xl-val)] pb-[env(safe-area-inset-bottom,12px)]"
+          side="top"
+          className="max-h-[55dvh] rounded-b-(--radius-xl-val) pt-[env(safe-area-inset-top,12px)]"
         >
           <SheetHeader className="pb-2">
             <SheetTitle>载入模版</SheetTitle>
